@@ -27,7 +27,7 @@
 | Path | Responsibility |
 |------|----------------|
 | `sql/blog_hn_schema.sql` | DDL + TRANSLATE 提示词种子 |
-| `sql/blog_hn_menu_seed.sql` | 菜单 2050 + 按钮权限 |
+| `sql/blog_hn_menu_seed.sql` | 菜单 2070 + 按钮权限 |
 | `sql/blog_hn_job_seed.sql` | Quartz 任务种子 |
 | `.../blog/domain/BlogHnItem.java` | 帖实体 |
 | `.../blog/domain/BlogHnRank.java` | 榜快照实体 |
@@ -122,9 +122,9 @@ WHERE NOT EXISTS (SELECT 1 FROM `ai_prompt_template` WHERE `scene_type` = 'TRANS
 
 | id | 名称 | 权限 |
 |----|------|------|
-| 2050 | HN 内容 | `blog:hn:list`，component `blog/hn/index` |
-| 2230 | HN 查询 | `blog:hn:query` |
-| 2231 | HN 同步 | `blog:hn:sync` |
+| 2070 | HN 内容 | `blog:hn:list`，component `blog/hn/index` |
+| 2240 | HN 查询 | `blog:hn:query` |
+| 2241 | HN 同步 | `blog:hn:sync` |
 
 `INSERT IGNORE` + `sys_role_menu` 给 role_id=1。
 

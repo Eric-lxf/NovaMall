@@ -65,26 +65,28 @@ public class HnSyncServiceImpl implements HnSyncService
     @Override
     public boolean syncBoardAsync(String board)
     {
-        HnBoard.fromCode(board);
-        if (!runningBoards.add(board))
+        HnBoard hnBoard = HnBoard.fromCode(board);
+        String code = hnBoard.getCode();
+        if (!runningBoards.add(code))
         {
             return false;
         }
-        self.runSyncBoardAsync(board);
+        self.runSyncBoardAsync(hnBoard);
         return true;
     }
 
     @Async("aiTaskExecutor")
-    public void runSyncBoardAsync(String board)
+    public void runSyncBoardAsync(HnBoard hnBoard)
     {
+        String code = hnBoard.getCode();
         try
         {
-            syncBoard(board);
+            doSyncBoardUnlocked(hnBoard);
         }
         finally
         {
-            runningBoards.remove(board);
-            lastSyncAt.put(board, LocalDateTime.now());
+            runningBoards.remove(code);
+            lastSyncAt.put(code, LocalDateTime.now());
         }
     }
 
@@ -92,6 +94,24 @@ public class HnSyncServiceImpl implements HnSyncService
     public void syncBoard(String board)
     {
         HnBoard hnBoard = HnBoard.fromCode(board);
+        String code = hnBoard.getCode();
+        if (!runningBoards.add(code))
+        {
+            return;
+        }
+        try
+        {
+            doSyncBoardUnlocked(hnBoard);
+        }
+        finally
+        {
+            runningBoards.remove(code);
+            lastSyncAt.put(code, LocalDateTime.now());
+        }
+    }
+
+    private void doSyncBoardUnlocked(HnBoard hnBoard)
+    {
         List<Long> ids = hnClient.fetchStoryIds(hnBoard);
         LocalDateTime snapshotAt = LocalDateTime.now();
         LocalDateTime fetchedAt = snapshotAt;

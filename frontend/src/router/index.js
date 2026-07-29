@@ -59,6 +59,18 @@ export const constantRoutes = [
         meta: { title: '博客' }
       },
       {
+        path: 'hn',
+        name: 'BlogPublicHnList',
+        component: () => import('@/views/public/blog/hn/index.vue'),
+        meta: { title: 'Hacker News' }
+      },
+      {
+        path: 'hn/:hnId(\\d+)',
+        name: 'BlogPublicHnDetail',
+        component: () => import('@/views/public/blog/hn/detail.vue'),
+        meta: { title: 'HN 详情' }
+      },
+      {
         path: ':id(\\d+)',
         name: 'BlogPublicDetail',
         component: () => import('@/views/public/blog/detail.vue'),

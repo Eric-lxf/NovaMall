@@ -28,6 +28,9 @@ mysql -u root -p < sql/blog_notification_menu_fix.sql
 mysql -u root -p < sql/blog_comment_menu_route_fix.sql
 mysql -u root -p < sql/blog_analytics_schema.sql
 mysql -u root -p < sql/blog_menu_seed.sql
+mysql -u root -p < sql/blog_hn_schema.sql
+mysql -u root -p < sql/blog_hn_menu_seed.sql
+mysql -u root -p < sql/blog_hn_job_seed.sql
 mysql -u root -p < sql/wechat_schema.sql
 mysql -u root -p < sql/wechat_menu_route_fix.sql
 mysql -u root -p < sql/ai_provider_schema.sql

@@ -3,6 +3,7 @@ package com.ruoyi.blog.service.hn.impl;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -46,19 +48,22 @@ public class HnSyncServiceImpl implements HnSyncService
     private final BlogHnRankMapper rankMapper;
     private final DeepSeekService deepSeekService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
     private final HnSyncServiceImpl self;
 
     private final Set<String> runningBoards = ConcurrentHashMap.newKeySet();
     private final ConcurrentHashMap<String, LocalDateTime> lastSyncAt = new ConcurrentHashMap<>();
 
     public HnSyncServiceImpl(HnClient hnClient, BlogHnItemMapper itemMapper, BlogHnRankMapper rankMapper,
-            DeepSeekService deepSeekService, ObjectMapper objectMapper, @Lazy HnSyncServiceImpl self)
+            DeepSeekService deepSeekService, ObjectMapper objectMapper, TransactionTemplate transactionTemplate,
+            @Lazy HnSyncServiceImpl self)
     {
         this.hnClient = hnClient;
         this.itemMapper = itemMapper;
         this.rankMapper = rankMapper;
         this.deepSeekService = deepSeekService;
         this.objectMapper = objectMapper;
+        this.transactionTemplate = transactionTemplate;
         this.self = self;
     }
 
@@ -116,6 +121,7 @@ public class HnSyncServiceImpl implements HnSyncService
         LocalDateTime snapshotAt = LocalDateTime.now();
         LocalDateTime fetchedAt = snapshotAt;
 
+        List<Long> successIds = new ArrayList<>();
         for (Long hnId : ids)
         {
             HnItemDto dto;
@@ -132,12 +138,17 @@ public class HnSyncServiceImpl implements HnSyncService
             {
                 continue;
             }
-            upsertItem(dto, fetchedAt);
+            if (upsertItem(dto, fetchedAt))
+            {
+                successIds.add(hnId);
+            }
         }
 
-        insertRankSnapshot(hnBoard.getCode(), ids, snapshotAt);
-        deleteOldRanks(hnBoard.getCode(), snapshotAt);
-        translatePendingInSnapshot(ids);
+        transactionTemplate.executeWithoutResult(status -> {
+            insertRankSnapshot(hnBoard.getCode(), successIds, snapshotAt);
+            deleteOldRanks(hnBoard.getCode(), snapshotAt);
+        });
+        translatePendingInSnapshot(successIds);
     }
 
     @Override
@@ -164,7 +175,7 @@ public class HnSyncServiceImpl implements HnSyncService
         return status;
     }
 
-    private void upsertItem(HnItemDto dto, LocalDateTime fetchedAt)
+    private boolean upsertItem(HnItemDto dto, LocalDateTime fetchedAt)
     {
         BlogHnItem existing = itemMapper.selectOne(new LambdaQueryWrapper<BlogHnItem>()
                 .eq(BlogHnItem::getHnId, dto.getId())
@@ -188,7 +199,15 @@ public class HnSyncServiceImpl implements HnSyncService
         }
         item.setFetchedAt(fetchedAt);
 
-        if (isNew || titleChanged)
+        if (titleChanged)
+        {
+            item.setStatus(0);
+            item.setTitleZh(null);
+            item.setSummaryZh(null);
+            item.setTextZh(null);
+            item.setTranslateStatus("pending");
+        }
+        else if (isNew)
         {
             item.setTranslateStatus("pending");
         }
@@ -204,6 +223,7 @@ public class HnSyncServiceImpl implements HnSyncService
             item.setUpdateTime(now);
             itemMapper.updateById(item);
         }
+        return true;
     }
 
     private void insertRankSnapshot(String board, List<Long> ids, LocalDateTime snapshotAt)

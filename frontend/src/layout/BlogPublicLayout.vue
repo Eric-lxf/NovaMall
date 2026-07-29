@@ -18,6 +18,7 @@ onMounted(() => {
       <RouterLink to="/blog" class="logo">AI 技术博客</RouterLink>
       <nav class="nav">
         <RouterLink to="/blog">首页</RouterLink>
+        <RouterLink to="/blog/hn">Hacker News</RouterLink>
         <RouterLink to="/index">管理后台</RouterLink>
       </nav>
     </header>

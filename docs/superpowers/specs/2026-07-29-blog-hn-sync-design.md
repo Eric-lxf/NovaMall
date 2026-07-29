@@ -1,9 +1,9 @@
 # Design: Hacker News 同步至博客模块
 
-**Status**: Approved  
+**Status**: Implemented  
 **Author**: Alex / Cursor  
 **Last Updated**: 2026-07-29  
-**Branch**: （实现时新建，如 `feat/blog-hn-sync`）  
+**Branch**: feat/blog-hn-sync  
 **Stakeholders**: Eng / Product
 
 ---

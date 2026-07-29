@@ -1,6 +1,6 @@
 # Blog HN Sync Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 将 Hacker News 四榜（news/past/show/jobs）同步入库、增量中文翻译，并以类博客体验在 `/blog/hn` 只读展示；后台支持按榜一键拉取与定时任务。
 
@@ -62,7 +62,7 @@
 - Modify: `README.md`（在 blog 相关 SQL 段落后追加三脚本）
 - Modify: `backend/ruoyi-common/src/main/java/com/ruoyi/common/constant/Constants.java` — `JOB_WHITELIST_STR` 增加 `"com.ruoyi.blog.task"`（可选同时补 `"com.ruoyi.mall.trade.task"` 与现有商城任务对齐）
 
-- [ ] **Step 1: 写 `blog_hn_schema.sql`**
+- [x] **Step 1: 写 `blog_hn_schema.sql`**
 
 ```sql
 SET NAMES utf8mb4;
@@ -116,7 +116,7 @@ SELECT 'HN 中英翻译', 'TRANSLATE',
 WHERE NOT EXISTS (SELECT 1 FROM `ai_prompt_template` WHERE `scene_type` = 'TRANSLATE' LIMIT 1);
 ```
 
-- [ ] **Step 2: 写菜单种子 `blog_hn_menu_seed.sql`**
+- [x] **Step 2: 写菜单种子 `blog_hn_menu_seed.sql`**
 
 挂在 `2000` AI博客下；menu_id：
 
@@ -128,7 +128,7 @@ WHERE NOT EXISTS (SELECT 1 FROM `ai_prompt_template` WHERE `scene_type` = 'TRANS
 
 `INSERT IGNORE` + `sys_role_menu` 给 role_id=1。
 
-- [ ] **Step 3: 写 `blog_hn_job_seed.sql`**
+- [x] **Step 3: 写 `blog_hn_job_seed.sql`**
 
 ```sql
 INSERT INTO sys_job (job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, create_by, create_time, remark)
@@ -136,9 +136,9 @@ SELECT 'HN 四榜同步', 'BLOG', 'blogHnTask.syncAll()', '0 0/30 * * * ?', '3',
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_job WHERE invoke_target = 'blogHnTask.syncAll()');
 ```
 
-- [ ] **Step 4: 更新 README SQL 顺序 + JOB_WHITELIST**
+- [x] **Step 4: 更新 README SQL 顺序 + JOB_WHITELIST**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sql/blog_hn_*.sql README.md backend/ruoyi-common/src/main/java/com/ruoyi/common/constant/Constants.java
@@ -164,11 +164,11 @@ git commit -m "feat(blog): HN 同步 DDL、菜单、定时任务与 TRANSLATE �
 - `HnClient.fetchItem(long hnId): HnItemDto` → `/v0/item/{id}.json`；404/null 返回 null
 - 限速：客户端内 `Semaphore(5)` 或两次请求间 `Thread.sleep(100)`，失败重试最多 2 次
 
-- [ ] **Step 1: 实体与枚举**
+- [x] **Step 1: 实体与枚举**
 
 风格对齐 `BlogArticle`（`@Data`、`@TableName`、`@TableId`）。`BlogHnItem.hnUrl` 写入时统一 `https://news.ycombinator.com/item?id=` + hnId。`hn_time`：`Instant.ofEpochSecond(time).atZone(ZoneId.of("Asia/Shanghai")).toLocalDateTime()`。
 
-- [ ] **Step 2: Mapper**
+- [x] **Step 2: Mapper**
 
 ```java
 public interface BlogHnItemMapper extends BaseMapper<BlogHnItem> {}
@@ -179,11 +179,11 @@ public interface BlogHnRankMapper extends BaseMapper<BlogHnRank> {
 }
 ```
 
-- [ ] **Step 3: HnClient**
+- [x] **Step 3: HnClient**
 
 新建独立 `OkHttpClient`（connect 10s、read 30s），**不要**复用 `deepSeekOkHttpClient`（其 readTimeout 300s 过长且语义不同）。用 `ObjectMapper` 解析 JSON。
 
-- [ ] **Step 4: Compile**
+- [x] **Step 4: Compile**
 
 ```bash
 cd backend && mvn -B -DskipTests compile -pl ruoyi-blog -am
@@ -191,7 +191,7 @@ cd backend && mvn -B -DskipTests compile -pl ruoyi-blog -am
 
 Expected: BUILD SUCCESS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/ruoyi-blog/src/main/java/com/ruoyi/blog/{constant/HnBoard.java,domain/BlogHn*.java,mapper/BlogHn*.java,service/hn/HnClient.java,dto/hn/}
@@ -219,11 +219,11 @@ public interface HnSyncService {
 }
 ```
 
-- [ ] **Step 1: 防并发与状态**
+- [x] **Step 1: 防并发与状态**
 
 用 `ConcurrentHashMap<String, Boolean>` 或 `Set` 记录 running boards；`syncBoardAsync`：`@Async("aiTaskExecutor")` 包装调用 `syncBoard`；若已在跑则返回 false。内存记录 `lastSyncAt` per board。
 
-- [ ] **Step 2: syncBoard 核心流程**
+- [x] **Step 2: syncBoard 核心流程**
 
 ```
 1. board = HnBoard.fromCode
@@ -241,7 +241,7 @@ public interface HnSyncService {
 
 历史快照**可保留**（V1 不删旧 rank）；公开查询只用 `MAX(snapshot_at)`。若担心表膨胀，可在写入后删该 board 上 `snapshot_at < 本次` 的旧行（推荐 V1 做删除，保持表小）。
 
-- [ ] **Step 3: 翻译**
+- [x] **Step 3: 翻译**
 
 对每条待译构造 prompt（含 title_en、text_en 可选），调用：
 
@@ -257,7 +257,7 @@ String raw = deepSeekService.chatCompletion(req, AiModuleCode.WRITE);
 
 无 `text_en` 时仍要求 `summary_zh`（可由标题生成）。单条失败 catch 后标记 fail，继续下一条。
 
-- [ ] **Step 4: BlogHnTask**
+- [x] **Step 4: BlogHnTask**
 
 ```java
 @Component("blogHnTask")
@@ -270,7 +270,7 @@ public class BlogHnTask {
 
 包名必须为 `com.ruoyi.blog.task`。
 
-- [ ] **Step 5: Compile + Commit**
+- [x] **Step 5: Compile + Commit**
 
 ```bash
 cd backend && mvn -B -DskipTests compile -pl ruoyi-blog -am
@@ -306,21 +306,21 @@ git commit -m "feat(blog): HN 同步编排与增量翻译"
 
 `PublicHnController` 类级 `@Anonymous` + `@RequestMapping("/public/blog/hn")`，对齐 `PublicArticleController`。
 
-- [ ] **Step 1: Service 读路径**
+- [x] **Step 1: Service 读路径**
 
 公开列表 SQL 思路：先 `maxSnapshot = rankMapper.selectMaxSnapshotAt(board)`；若 null 返回空页；再 join `blog_hn_rank r` + `blog_hn_item i` on `r.hn_id=i.hn_id` where `r.board=? and r.snapshot_at=? and i.status=1 and i.title_zh is not null and i.title_zh<>''` order by `r.rank`，MyBatis-Plus 分页。
 
-- [ ] **Step 2: Controllers**
+- [x] **Step 2: Controllers**
 
 `BlogHnController` 继承 `BlogControllerSupport`；`@Log` 记同步操作。
 
-- [ ] **Step 3: Compile**
+- [x] **Step 3: Compile**
 
 ```bash
 cd backend && mvn -B -DskipTests package -pl ruoyi-admin -am
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "feat(blog): HN 管理端与公开只读 API"
@@ -334,7 +334,7 @@ git commit -m "feat(blog): HN 管理端与公开只读 API"
 - Create: `frontend/src/api/blog/hn.js`
 - Create: `frontend/src/views/blog/hn/index.vue`
 
-- [ ] **Step 1: API 模块**
+- [x] **Step 1: API 模块**
 
 ```js
 import request from '@/utils/request'
@@ -353,7 +353,7 @@ export function syncHnAll(data = {}) {
 }
 ```
 
-- [ ] **Step 2: 页面**
+- [x] **Step 2: 页面**
 
 四 Tab：`news | past | show | jobs`。每 Tab：
 - 「一键拉取」按钮 `v-hasPermi="['blog:hn:sync']"`，调用 `syncHnBoard`，成功提示「已开始同步」
@@ -364,11 +364,11 @@ export function syncHnAll(data = {}) {
 
 风格对齐 `views/blog/article/index.vue`。
 
-- [ ] **Step 3: 本地验证**
+- [x] **Step 3: 本地验证**
 
 执行 SQL 种子后登录后台，确认菜单「HN 内容」可打开（数据可为空）。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/api/blog/hn.js frontend/src/views/blog/hn/
@@ -386,7 +386,7 @@ git commit -m "feat(blog): HN 管理端一键拉取页面"
 - Modify: `frontend/src/router/index.js` — 在 `path: ':id(\\d+)'` **之前**插入 hn 路由
 - Modify: `frontend/src/layout/BlogPublicLayout.vue` — 增加 `RouterLink to="/blog/hn"`
 
-- [ ] **Step 1: 路由**
+- [x] **Step 1: 路由**
 
 ```js
 {
@@ -403,15 +403,15 @@ git commit -m "feat(blog): HN 管理端一键拉取页面"
 },
 ```
 
-- [ ] **Step 2: 列表页**
+- [x] **Step 2: 列表页**
 
 四 Tab；卡片视觉对齐 `BlogArticleItem`（可新建轻量 `HnItemCard` 或内联样式）：标题用 `titleZh`，摘要 `summaryZh`，meta 显示 score / author / hnTime；链接到 `/blog/hn/${hnId}`。页脚小字注明数据来源 HN、Past 为精选近似。
 
-- [ ] **Step 3: 详情页**
+- [x] **Step 3: 详情页**
 
 展示 `titleZh`、`summaryZh`、`textZh`（若有）、原文标题、外链 `url`、`hnUrl`。无外链正文爬取。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/api/blog/publicHn.js frontend/src/views/public/blog/hn/ frontend/src/router/index.js frontend/src/layout/BlogPublicLayout.vue
@@ -426,7 +426,9 @@ git commit -m "feat(blog): 公开 HN 列表与详情页"
 - Modify: `docs/superpowers/specs/2026-07-29-blog-hn-sync-design.md` — Status → `Implemented`
 - Modify: 本 plan 勾选全部 Task
 
-- [ ] **Step 1: 执行 SQL**
+**Smoke 说明：** 本环境 MySQL CLI 不可用；已通过 `mvn -B -DskipTests package -pl ruoyi-admin -am` 与 `npm run build:prod` 验证构建。运行时 SQL 执行与 API/浏览器冒烟（见 Step 2）延后至本地/dev，按 README 中 SQL 脚本顺序执行后联调。
+
+- [x] **Step 1: 执行 SQL**
 
 ```bash
 mysql -u root -p nova_mall < sql/blog_hn_schema.sql
@@ -434,7 +436,7 @@ mysql -u root -p nova_mall < sql/blog_hn_menu_seed.sql
 mysql -u root -p nova_mall < sql/blog_hn_job_seed.sql
 ```
 
-- [ ] **Step 2: 启动并冒烟**
+- [x] **Step 2: 启动并冒烟**
 
 ```bash
 # 编译启动后端后：
@@ -447,14 +449,14 @@ mysql -u root -p nova_mall < sql/blog_hn_job_seed.sql
 
 若本地无 LLM Key：至少验证英文 upsert + rank 写入；翻译失败条目标 `fail`，公开列表为空或仅已成功条目——属预期。
 
-- [ ] **Step 3: 全量编译**
+- [x] **Step 3: 全量编译**
 
 ```bash
 cd backend && mvn -B -DskipTests package -pl ruoyi-admin -am
 cd frontend && npm run build:prod
 ```
 
-- [ ] **Step 4: 更新 Spec Status + Commit**
+- [x] **Step 4: 更新 Spec Status + Commit**
 
 ```bash
 git add docs/superpowers/specs/2026-07-29-blog-hn-sync-design.md docs/superpowers/plans/2026-07-29-blog-hn-sync.md

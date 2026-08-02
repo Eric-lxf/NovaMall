@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 defineOptions({ name: 'MallAdminSpu' })
 
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -13,6 +13,7 @@ import {
   updateMallSpu,
   updateMallSpuStatus
 } from '@/api/mall/spu'
+import { adjustMallInventory } from '@/api/mall/inventory'
 import { resolveUploadUrl } from '@/utils/blogAssets'
 
 const loading = ref(false)
@@ -27,10 +28,27 @@ const title = ref('')
 const formRef = ref()
 const saleAttrs = ref([])
 const descAttrs = ref([])
-/** @type {import('vue').Ref<Record<number|string, string[]>>} */
+/** @type {import('vue').Ref<Record<number|string, Array<number|string>>>} */
 const saleSelected = ref({})
 /** @type {import('vue').Ref<Record<number|string, string|string[]>>} */
 const descValues = ref({})
+const adjustOpen = ref(false)
+const adjusting = ref(false)
+const adjustForm = reactive({
+  skuId: undefined,
+  skuCode: '',
+  quantity: 1,
+  reason: 'PURCHASE_IN',
+  remark: ''
+})
+const adjustReasons = [
+  { label: '采购入库', value: 'PURCHASE_IN' },
+  { label: '手工入库', value: 'MANUAL_IN' },
+  { label: '手工出库', value: 'MANUAL_OUT' },
+  { label: '报损', value: 'DAMAGE' },
+  { label: '退货入库', value: 'RETURN' },
+  { label: '盘点校正', value: 'CORRECTION' }
+]
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
@@ -103,11 +121,31 @@ function createSku() {
   return {
     id: undefined,
     skuCode: '',
+    specs: [],
     specsJson: '{}',
     price: 0,
     stock: 0,
+    stockAvailable: 0,
+    stockLocked: 0,
+    stockTotal: 0,
     status: '0'
   }
+}
+
+function specsText(sku) {
+  if (Array.isArray(sku.specs) && sku.specs.length) {
+    return sku.specs.map(item => item.value).filter(Boolean).join(' / ')
+  }
+  try {
+    const specs = JSON.parse(sku.specsJson || '{}')
+    return Object.values(specs).join(' / ') || '-'
+  } catch {
+    return sku.specsJson || '-'
+  }
+}
+
+function stockDisplay(sku) {
+  return sku.stockAvailable ?? sku.stock ?? 0
 }
 
 function priceText(row) {
@@ -170,25 +208,28 @@ async function loadAttrTemplate(categoryId, existingAttrValues = []) {
     }
     descValues.value = nextDesc
 
-    // 从已有 SKU 回填销售属性多选
+    // 从已有 SKU 回填销售属性多选（优先 optionId）
     if (form.skus?.length) {
       for (const attr of saleAttrs.value) {
-        const values = new Set()
+        const selected = new Set()
         for (const sku of form.skus) {
+          const structured = Array.isArray(sku.specs) ? sku.specs : []
+          const hit = structured.find(item => Number(item.attrId) === Number(attr.id))
+          if (hit?.optionId != null) {
+            selected.add(hit.optionId)
+            continue
+          }
           try {
             const specs = JSON.parse(sku.specsJson || '{}')
             const raw = specs[attr.name]
             if (raw == null || raw === '') continue
-            if (Array.isArray(raw)) {
-              raw.forEach(v => values.add(String(v)))
-            } else {
-              String(raw).split(',').map(s => s.trim()).filter(Boolean).forEach(v => values.add(v))
-            }
+            const opt = optionList(attr).find(item => item.value === String(raw))
+            if (opt?.id != null) selected.add(opt.id)
           } catch {
             /* ignore */
           }
         }
-        saleSelected.value[attr.id] = [...values]
+        saleSelected.value[attr.id] = [...selected]
       }
     }
   } catch (e) {
@@ -214,6 +255,13 @@ function cartesian(arrays) {
   )
 }
 
+function buildSpecKey(specs) {
+  return [...(specs || [])]
+    .sort((a, b) => Number(a.attrId) - Number(b.attrId))
+    .map(item => `attr:${item.attrId}=option:${item.optionId}`)
+    .join('|')
+}
+
 function generateSkusFromSale() {
   if (!saleAttrs.value.length) {
     ElMessage.warning('当前类目无销售属性')
@@ -221,37 +269,66 @@ function generateSkusFromSale() {
   }
   const dims = []
   for (const attr of saleAttrs.value) {
-    const selected = saleSelected.value[attr.id] || []
-    if (!selected.length) {
+    const selectedIds = saleSelected.value[attr.id] || []
+    if (!selectedIds.length) {
       ElMessage.warning(`请为销售属性「${attr.name}」至少选择一个值`)
       return
     }
-    dims.push(selected.map(value => ({ name: attr.name, value })))
+    const options = optionList(attr)
+    const picked = selectedIds.map(id => {
+      const opt = options.find(item => Number(item.id) === Number(id))
+      if (!opt) return null
+      return {
+        attrId: attr.id,
+        optionId: opt.id,
+        value: opt.value,
+        name: attr.name
+      }
+    }).filter(Boolean)
+    if (!picked.length) {
+      ElMessage.warning(`销售属性「${attr.name}」选项无效`)
+      return
+    }
+    dims.push(picked)
   }
   const combos = cartesian(dims)
-  const existingBySpecs = new Map()
+  const existingByKey = new Map()
   for (const sku of form.skus || []) {
-    existingBySpecs.set(sku.specsJson || '{}', sku)
+    const key = buildSpecKey(sku.specs) || sku.specsJson || '{}'
+    existingByKey.set(key, sku)
   }
-  form.skus = combos.map((combo, index) => {
-    const specs = {}
+  const nextSkus = combos.map((combo, index) => {
+    const specs = combo.map(item => ({
+      attrId: item.attrId,
+      optionId: item.optionId,
+      value: item.value
+    }))
+    const display = {}
     const codeParts = []
     for (const item of combo) {
-      specs[item.name] = item.value
+      display[item.name] = item.value
       codeParts.push(item.value)
     }
-    const specsJson = JSON.stringify(specs)
-    const prev = existingBySpecs.get(specsJson)
+    const specsJson = JSON.stringify(display)
+    const key = buildSpecKey(specs)
+    const prev = existingByKey.get(key)
     if (prev) {
-      return { ...createSku(), ...prev, specsJson }
+      return { ...createSku(), ...prev, specs, specsJson }
     }
     const prefix = (form.name || 'SKU').replace(/\s+/g, '').slice(0, 16)
     return {
       ...createSku(),
       skuCode: `${prefix}-${codeParts.join('-') || index + 1}`.slice(0, 64),
+      specs,
       specsJson
     }
   })
+  const keys = nextSkus.map(sku => buildSpecKey(sku.specs))
+  if (new Set(keys).size !== keys.length) {
+    ElMessage.error('生成结果存在重复规格，请检查销售属性选择')
+    return
+  }
+  form.skus = nextSkus
   ElMessage.success(`已生成 ${form.skus.length} 个 SKU`)
 }
 
@@ -345,7 +422,12 @@ async function handleUpdate(row) {
   const detail = res.data || row
   Object.assign(form, {
     ...detail,
-    skus: (detail.skus || detail.skuList || []).map(item => ({ ...createSku(), ...item }))
+    skus: (detail.skus || detail.skuList || []).map(item => ({
+      ...createSku(),
+      ...item,
+      specs: Array.isArray(item.specs) ? item.specs : [],
+      stock: item.stockAvailable ?? item.stock ?? 0
+    }))
   })
   if (!form.skus.length) {
     form.skus.push(createSku())
@@ -371,16 +453,30 @@ function buildPayload() {
   return {
     ...form,
     attrValues: buildAttrValues(),
-    skus: form.skus.map(item => ({
-      ...item,
-      price: Number(item.price || 0),
-      stock: Number(item.stock || 0)
-    }))
+    skus: form.skus.map(item => {
+      const payload = {
+        id: item.id,
+        skuCode: item.skuCode,
+        specs: Array.isArray(item.specs) ? item.specs : [],
+        specsJson: item.specsJson,
+        price: Number(item.price || 0),
+        status: item.status,
+        remark: item.remark
+      }
+      // 仅新建 SKU 允许带初始库存；编辑已有 SKU 不传库存
+      if (!item.id) {
+        payload.stock = Number(item.stock || 0)
+      }
+      return payload
+    })
   }
 }
 
 function skuMissingSaleSpecs(sku) {
   if (sku.status === '1') return false
+  if (Array.isArray(sku.specs) && sku.specs.length) {
+    return saleAttrs.value.some(attr => !sku.specs.some(item => Number(item.attrId) === Number(attr.id)))
+  }
   let specs = {}
   try {
     specs = JSON.parse(sku.specsJson || '{}')
@@ -391,6 +487,53 @@ function skuMissingSaleSpecs(sku) {
     const v = specs[attr.name]
     return v == null || v === '' || (Array.isArray(v) && !v.length)
   })
+}
+
+function openAdjust(row) {
+  if (!row.id) {
+    ElMessage.warning('请先保存商品后再调整库存')
+    return
+  }
+  Object.assign(adjustForm, {
+    skuId: row.id,
+    skuCode: row.skuCode,
+    quantity: 1,
+    reason: 'PURCHASE_IN',
+    remark: ''
+  })
+  adjustOpen.value = true
+}
+
+async function submitAdjust() {
+  if (!adjustForm.skuId || !adjustForm.quantity) {
+    ElMessage.warning('请填写调整数量')
+    return
+  }
+  const outbound = ['MANUAL_OUT', 'DAMAGE'].includes(adjustForm.reason)
+  const quantity = outbound ? -Math.abs(Number(adjustForm.quantity)) : Math.abs(Number(adjustForm.quantity))
+  adjusting.value = true
+  try {
+    const res = await adjustMallInventory({
+      skuId: adjustForm.skuId,
+      quantity,
+      reason: adjustForm.reason,
+      remark: adjustForm.remark
+    })
+    const sku = res.data || {}
+    const target = form.skus.find(item => item.id === adjustForm.skuId)
+    if (target) {
+      target.stock = sku.stockAvailable ?? sku.stock ?? target.stock
+      target.stockAvailable = sku.stockAvailable
+      target.stockLocked = sku.stockLocked
+      target.stockTotal = sku.stockTotal
+    }
+    ElMessage.success('库存调整成功')
+    adjustOpen.value = false
+  } catch (e) {
+    console.error('库存调整失败', e)
+  } finally {
+    adjusting.value = false
+  }
 }
 
 async function submitForm() {
@@ -424,9 +567,21 @@ async function submitForm() {
       return
     }
   }
-  const invalidSku = form.skus.find(item => !item.skuCode || Number(item.price) < 0 || Number(item.stock) < 0)
+  const invalidSku = form.skus.find(item => {
+    if (!item.skuCode || Number(item.price) < 0) return true
+    if (!item.id && Number(item.stock) < 0) return true
+    return false
+  })
   if (invalidSku) {
-    ElMessage.warning('请完整填写 SKU 编码、价格和库存')
+    ElMessage.warning('请完整填写 SKU 编码和价格（新建 SKU 还需填写初始库存）')
+    return
+  }
+  const specKeys = form.skus
+    .filter(item => item.status !== '1')
+    .map(item => buildSpecKey(item.specs))
+    .filter(Boolean)
+  if (specKeys.length && new Set(specKeys).size !== specKeys.length) {
+    ElMessage.warning('存在重复规格 SKU，请重新生成后再保存')
     return
   }
   saving.value = true
@@ -718,7 +873,7 @@ onMounted(async () => {
                     v-for="opt in optionList(attr)"
                     :key="opt.id || opt.value"
                     :label="opt.value"
-                    :value="opt.value"
+                    :value="opt.id"
                   />
                 </el-select>
               </el-form-item>
@@ -728,7 +883,10 @@ onMounted(async () => {
 
         <div class="sku-header">
           <span>SKU 信息</span>
-          <el-button link type="primary" @click="addSkuRow">新增 SKU</el-button>
+          <div>
+            <el-button v-if="!hasSaleAttrs" link type="primary" @click="addSkuRow">新增 SKU</el-button>
+            <span v-else class="text-muted">有销售属性时请通过上方选择器生成 SKU</span>
+          </div>
         </div>
         <el-table :data="form.skus" border>
           <el-table-column label="SKU编码" min-width="170">
@@ -736,9 +894,9 @@ onMounted(async () => {
               <el-input v-model="row.skuCode" placeholder="如 DEMO-SKU-BLACK" />
             </template>
           </el-table-column>
-          <el-table-column label="规格JSON" min-width="220">
+          <el-table-column label="规格" min-width="200">
             <template #default="{ row }">
-              <el-input v-model="row.specsJson" placeholder='{"颜色":"黑色"}' />
+              <span>{{ specsText(row) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="价格" width="150">
@@ -746,9 +904,13 @@ onMounted(async () => {
               <el-input-number v-model="row.price" :min="0" :precision="2" controls-position="right" />
             </template>
           </el-table-column>
-          <el-table-column label="库存" width="130">
+          <el-table-column label="可售库存" width="150">
             <template #default="{ row }">
-              <el-input-number v-model="row.stock" :min="0" :precision="0" controls-position="right" />
+              <template v-if="row.id">
+                <span>{{ stockDisplay(row) }}</span>
+                <div class="text-muted">锁定 {{ row.stockLocked ?? 0 }} / 实际 {{ row.stockTotal ?? stockDisplay(row) }}</div>
+              </template>
+              <el-input-number v-else v-model="row.stock" :min="0" :precision="0" controls-position="right" />
             </template>
           </el-table-column>
           <el-table-column label="状态" width="110">
@@ -759,8 +921,9 @@ onMounted(async () => {
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="80" align="center">
-            <template #default="{ $index }">
+          <el-table-column label="操作" width="140" align="center">
+            <template #default="{ row, $index }">
+              <el-button v-if="row.id" link type="primary" @click="openAdjust(row)">调库存</el-button>
               <el-button link type="danger" @click="removeSkuRow($index)">删除</el-button>
             </template>
           </el-table-column>
@@ -769,6 +932,30 @@ onMounted(async () => {
       <template #footer>
         <el-button @click="open = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="submitForm">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="adjustOpen" title="调整库存" width="480px" append-to-body>
+      <el-form label-width="96px">
+        <el-form-item label="SKU">
+          <span>{{ adjustForm.skuCode }}</span>
+        </el-form-item>
+        <el-form-item label="原因" required>
+          <el-select v-model="adjustForm.reason" style="width: 100%">
+            <el-option v-for="item in adjustReasons" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="数量" required>
+          <el-input-number v-model="adjustForm.quantity" :min="1" :precision="0" controls-position="right" />
+          <div class="text-muted">出库类原因会自动按负数扣减可售库存</div>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="adjustForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="adjustOpen = false">取消</el-button>
+        <el-button type="primary" :loading="adjusting" @click="submitAdjust">确定</el-button>
       </template>
     </el-dialog>
   </div>

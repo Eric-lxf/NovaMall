@@ -659,6 +659,10 @@ public class MallSpuServiceImpl implements MallSpuService
 
         for (MallAttrVO attr : saleAttrs)
         {
+            if (!"1".equals(attr.getRequired()))
+            {
+                continue;
+            }
             if (!byAttr.containsKey(attr.getId()))
             {
                 throw new ServiceException(label + " 缺少销售属性「" + attr.getName() + "」", HttpStatus.BAD_REQUEST);
@@ -756,9 +760,14 @@ public class MallSpuServiceImpl implements MallSpuService
         Map<String, Object> specs = parseSpecsJson(specsJson, label);
         for (MallAttrVO attr : saleAttrs)
         {
+            boolean required = "1".equals(attr.getRequired());
             if (!specs.containsKey(attr.getName()))
             {
-                throw new ServiceException(label + " 缺少销售属性「" + attr.getName() + "」", HttpStatus.BAD_REQUEST);
+                if (required)
+                {
+                    throw new ServiceException(label + " 缺少销售属性「" + attr.getName() + "」", HttpStatus.BAD_REQUEST);
+                }
+                continue;
             }
             Object raw = specs.get(attr.getName());
             if (MallProductConstants.INPUT_TYPE_SELECT.equals(attr.getInputType())

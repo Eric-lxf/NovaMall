@@ -88,15 +88,16 @@ public class MallOrderServiceImpl implements MallOrderService
         order.setUpdateBy(SecurityUtils.getUsername());
         mallOrderMapper.insert(order);
 
+        String operator = SecurityUtils.getUsername();
         for (OrderLine line : lines)
         {
-            if (!mallSkuStockService.deductStock(line.sku().getSkuId(), line.quantity()))
+            if (!mallSkuStockService.lockStock(line.sku().getSkuId(), line.quantity(), order.getOrderNo(), operator))
             {
                 throw new ServiceException("商品库存不足：" + line.sku().getSpuName());
             }
             mallOrderItemMapper.insert(toOrderItem(order.getId(), line));
         }
-        addLog(order.getId(), null, MallOrderStatus.PENDING_PAY, "创建订单", SecurityUtils.getUsername());
+        addLog(order.getId(), null, MallOrderStatus.PENDING_PAY, "创建订单", operator);
 
         if (!CollectionUtils.isEmpty(request.getCartIds()))
         {
@@ -222,6 +223,12 @@ public class MallOrderServiceImpl implements MallOrderService
                 .eq(MallOrder::getStatus, MallOrderStatus.PENDING_PAY));
         if (rows > 0)
         {
+            List<MallOrderItem> items = mallOrderItemMapper.selectList(new LambdaQueryWrapper<MallOrderItem>()
+                    .eq(MallOrderItem::getOrderId, orderId));
+            for (MallOrderItem item : items)
+            {
+                mallSkuStockService.deductLockedStock(item.getSkuId(), item.getQuantity(), order.getOrderNo(), "payment");
+            }
             addLog(orderId, MallOrderStatus.PENDING_PAY, MallOrderStatus.PAID, "支付成功：" + payNo, "payment");
             return;
         }
@@ -353,7 +360,7 @@ public class MallOrderServiceImpl implements MallOrderService
                 .eq(MallOrderItem::getOrderId, order.getId()));
         for (MallOrderItem item : items)
         {
-            mallSkuStockService.restoreStock(item.getSkuId(), item.getQuantity());
+            mallSkuStockService.unlockStock(item.getSkuId(), item.getQuantity(), order.getOrderNo(), operator);
         }
         addLog(order.getId(), MallOrderStatus.PENDING_PAY, MallOrderStatus.CANCELLED, reason, operator);
     }

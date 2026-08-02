@@ -208,23 +208,32 @@ async function loadAttrTemplate(categoryId, existingAttrValues = []) {
     }
     descValues.value = nextDesc
 
-    // 从已有 SKU 回填销售属性多选（优先 optionId）
+    // 从已有 SKU 回填销售属性（select 用 optionId，text 用文本值）
     if (form.skus?.length) {
       for (const attr of saleAttrs.value) {
         const selected = new Set()
+        const isText = attr.inputType === 'text' || !attr.inputType
         for (const sku of form.skus) {
           const structured = Array.isArray(sku.specs) ? sku.specs : []
           const hit = structured.find(item => Number(item.attrId) === Number(attr.id))
-          if (hit?.optionId != null) {
-            selected.add(hit.optionId)
+          if (hit) {
+            if (!isText && hit.optionId != null) {
+              selected.add(hit.optionId)
+            } else if (hit.value) {
+              selected.add(String(hit.value))
+            }
             continue
           }
           try {
             const specs = JSON.parse(sku.specsJson || '{}')
             const raw = specs[attr.name]
             if (raw == null || raw === '') continue
-            const opt = optionList(attr).find(item => item.value === String(raw))
-            if (opt?.id != null) selected.add(opt.id)
+            if (isText) {
+              selected.add(String(raw))
+            } else {
+              const opt = optionList(attr).find(item => item.value === String(raw))
+              if (opt?.id != null) selected.add(opt.id)
+            }
           } catch {
             /* ignore */
           }
@@ -255,10 +264,23 @@ function cartesian(arrays) {
   )
 }
 
+function isTextAttr(attr) {
+  return attr?.inputType === 'text' || !attr?.inputType
+}
+
+function isSaleAttrRequired(attr) {
+  return attr?.required === '1'
+}
+
 function buildSpecKey(specs) {
   return [...(specs || [])]
     .sort((a, b) => Number(a.attrId) - Number(b.attrId))
-    .map(item => `attr:${item.attrId}=option:${item.optionId}`)
+    .map(item => {
+      if (item.optionId != null && item.optionId !== '') {
+        return `attr:${item.attrId}=option:${item.optionId}`
+      }
+      return `attr:${item.attrId}=value:${item.value || ''}`
+    })
     .join('|')
 }
 
@@ -269,27 +291,50 @@ function generateSkusFromSale() {
   }
   const dims = []
   for (const attr of saleAttrs.value) {
-    const selectedIds = saleSelected.value[attr.id] || []
-    if (!selectedIds.length) {
-      ElMessage.warning(`请为销售属性「${attr.name}」至少选择一个值`)
-      return
-    }
-    const options = optionList(attr)
-    const picked = selectedIds.map(id => {
-      const opt = options.find(item => Number(item.id) === Number(id))
-      if (!opt) return null
-      return {
-        attrId: attr.id,
-        optionId: opt.id,
-        value: opt.value,
-        name: attr.name
+    const selected = saleSelected.value[attr.id] || []
+    if (!selected.length) {
+      if (isSaleAttrRequired(attr)) {
+        ElMessage.warning(`请为必填销售属性「${attr.name}」至少设置一个值`)
+        return
       }
-    }).filter(Boolean)
+      continue
+    }
+    let picked = []
+    if (isTextAttr(attr)) {
+      picked = selected
+        .map(value => String(value || '').trim())
+        .filter(Boolean)
+        .map(value => ({
+          attrId: attr.id,
+          optionId: null,
+          value,
+          name: attr.name
+        }))
+    } else {
+      const options = optionList(attr)
+      picked = selected.map(id => {
+        const opt = options.find(item => Number(item.id) === Number(id))
+        if (!opt) return null
+        return {
+          attrId: attr.id,
+          optionId: opt.id,
+          value: opt.value,
+          name: attr.name
+        }
+      }).filter(Boolean)
+    }
     if (!picked.length) {
-      ElMessage.warning(`销售属性「${attr.name}」选项无效`)
-      return
+      if (isSaleAttrRequired(attr)) {
+        ElMessage.warning(`销售属性「${attr.name}」取值无效`)
+        return
+      }
+      continue
     }
     dims.push(picked)
+  }
+  if (!dims.length) {
+    ElMessage.warning('请至少为一个销售属性设置取值后再生成 SKU')
+    return
   }
   const combos = cartesian(dims)
   const existingByKey = new Map()
@@ -474,8 +519,10 @@ function buildPayload() {
 
 function skuMissingSaleSpecs(sku) {
   if (sku.status === '1') return false
+  const requiredAttrs = saleAttrs.value.filter(isSaleAttrRequired)
+  if (!requiredAttrs.length) return false
   if (Array.isArray(sku.specs) && sku.specs.length) {
-    return saleAttrs.value.some(attr => !sku.specs.some(item => Number(item.attrId) === Number(attr.id)))
+    return requiredAttrs.some(attr => !sku.specs.some(item => Number(item.attrId) === Number(attr.id)))
   }
   let specs = {}
   try {
@@ -483,7 +530,7 @@ function skuMissingSaleSpecs(sku) {
   } catch {
     return true
   }
-  return saleAttrs.value.some(attr => {
+  return requiredAttrs.some(attr => {
     const v = specs[attr.name]
     return v == null || v === '' || (Array.isArray(v) && !v.length)
   })
@@ -557,13 +604,15 @@ async function submitForm() {
     }
   }
   if (hasSaleAttrs.value) {
-    const needSelect = saleAttrs.value.find(attr => !(saleSelected.value[attr.id] || []).length)
+    const needSelect = saleAttrs.value.find(
+      attr => isSaleAttrRequired(attr) && !(saleSelected.value[attr.id] || []).length
+    )
     if (needSelect) {
-      ElMessage.warning(`请为销售属性「${needSelect.name}」选择取值，并点击「生成 SKU」`)
+      ElMessage.warning(`请为必填销售属性「${needSelect.name}」设置取值，并点击「生成 SKU」`)
       return
     }
     if (form.skus.some(skuMissingSaleSpecs)) {
-      ElMessage.warning('SKU 规格未包含销售属性，请点击「生成 SKU」后再保存')
+      ElMessage.warning('SKU 规格缺少必填销售属性，请点击「生成 SKU」后再保存')
       return
     }
   }
@@ -859,13 +908,30 @@ onMounted(async () => {
           </div>
           <el-row :gutter="16">
             <el-col v-for="attr in saleAttrs" :key="attr.id" :span="12">
-              <el-form-item :label="attr.name" required>
+              <el-form-item :label="attr.name" :required="isSaleAttrRequired(attr)">
+                <!-- 文本型：自由输入多个取值，不走选项下拉 -->
                 <el-select
+                  v-if="isTextAttr(attr)"
+                  v-model="saleSelected[attr.id]"
+                  multiple
+                  filterable
+                  allow-create
+                  default-first-option
+                  collapse-tags
+                  collapse-tags-tooltip
+                  clearable
+                  style="width: 100%"
+                  :placeholder="`输入${attr.name}后回车添加（可多个）`"
+                />
+                <!-- 枚举/多选：从属性选项中选择 -->
+                <el-select
+                  v-else
                   v-model="saleSelected[attr.id]"
                   multiple
                   collapse-tags
                   collapse-tags-tooltip
                   filterable
+                  clearable
                   style="width: 100%"
                   :placeholder="optionList(attr).length ? `请选择${attr.name}（可多选）` : '暂无选项，请先在属性管理维护'"
                 >

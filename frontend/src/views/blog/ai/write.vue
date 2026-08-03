@@ -81,6 +81,9 @@ async function stepSummary() {
 async function stepOutline() {
   loading.value = true
   try {
+    if (form.length === 'long' || form.audience === 'senior') {
+      ElMessage.info('大纲生成中，资深读者/长文可能需要 1～3 分钟，请勿关闭页面')
+    }
     const res = await generateOutline(form)
     form.outline = Array.isArray(res.data) ? res.data : []
     step.value = 3
@@ -130,6 +133,9 @@ async function stepGenerate() {
   }
   loading.value = true
   try {
+    if (form.length === 'long' || form.audience === 'senior' || (form.outline?.length ?? 0) >= 5) {
+      ElMessage.info('正文将按章节分段生成，耗时可能较长，请保持页面打开')
+    }
     const res = await submitGenerateArticle(form)
     const payload = res.data
     taskId.value = payload?.taskId ?? payload?.task_id

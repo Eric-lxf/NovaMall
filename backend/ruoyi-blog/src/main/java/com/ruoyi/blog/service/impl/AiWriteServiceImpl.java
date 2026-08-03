@@ -85,17 +85,24 @@ public class AiWriteServiceImpl implements AiWriteService
     @Override
     public List<OutlineNodeDTO> generateOutline(AiWriteWizardRequest request)
     {
+        String lengthHint = switch (request.getLength() == null ? "medium" : request.getLength())
+        {
+            case "short" -> "约 3 个一级章节即可，结构精简。";
+            case "long" -> "至少 5～8 个一级章节，每章可含 2～4 个小节，覆盖背景、原理、实践、踩坑与总结。";
+            default -> "至少 3～5 个一级章节，技术博客结构清晰。";
+        };
         String prompt = """
                 技术主题：%s
                 文章标题：%s
                 摘要：%s
                 目标读者：%s
                 篇幅：%s
+                %s
                 请生成文章大纲，以 JSON 数组返回。每个节点格式：
                 {"id":"1","title":"章节标题","children":[{"id":"1-1","title":"小节"}]}
-                至少 3 个一级章节，技术博客结构清晰。只输出 JSON。
+                只输出 JSON，不要 Markdown 代码围栏或其他文字。
                 """.formatted(request.getTopic(), request.getTitle(), request.getSummary(),
-                audienceLabel(request.getAudience()), lengthLabel(request.getLength()));
+                audienceLabel(request.getAudience()), lengthLabel(request.getLength()), lengthHint);
         String raw = deepSeekService.chatCompletion(completion("OUTLINE_GEN", prompt), AiModuleCode.WRITE);
         return parseOutline(raw);
     }
@@ -129,17 +136,9 @@ public class AiWriteServiceImpl implements AiWriteService
         aiTaskService.markRunning(taskId);
         try
         {
-            String outlineText = outlineToMarkdown(request.getOutline());
-            String prompt = """
-                    请根据以下信息撰写一篇完整的技术博客（Markdown）：
-                    标题：%s
-                    主题：%s
-                    摘要：%s
-                    大纲：
-                    %s
-                    要求：包含代码示例与必要的 ```mermaid 图表；段落清晰；不要输出标题以外的多余说明。
-                    """.formatted(request.getTitle(), request.getTopic(), request.getSummary(), outlineText);
-            String content = deepSeekService.chatCompletion(completion("FULL_ARTICLE", prompt), AiModuleCode.WRITE).trim();
+            String content = useSectionedGeneration(request)
+                    ? generateArticleBySections(request)
+                    : generateArticleSingleShot(request);
             Long articleId = aiWriteArticlePersistence.saveGeneratedDraft(request, content);
             aiTaskService.markSuccess(taskId, articleId, content);
         }
@@ -148,6 +147,79 @@ public class AiWriteServiceImpl implements AiWriteService
             log.error("Generate article task failed, taskId={}", taskId, e);
             aiTaskService.markFailed(taskId, e.getMessage());
         }
+    }
+
+    /**
+     * 长文 / 资深读者 / 大纲较深时，单次全文调用易超时；按一级章节分段生成再拼接。
+     */
+    private boolean useSectionedGeneration(AiWriteWizardRequest request)
+    {
+        if ("long".equals(request.getLength()) || "senior".equals(request.getAudience()))
+        {
+            return true;
+        }
+        List<OutlineNodeDTO> outline = request.getOutline();
+        return outline != null && outline.size() >= 5;
+    }
+
+    private String generateArticleSingleShot(AiWriteWizardRequest request)
+    {
+        String outlineText = outlineToMarkdown(request.getOutline());
+        String prompt = """
+                请根据以下信息撰写一篇完整的技术博客（Markdown）：
+                标题：%s
+                主题：%s
+                摘要：%s
+                目标读者：%s
+                篇幅：%s
+                大纲：
+                %s
+                要求：包含代码示例与必要的 ```mermaid 图表；段落清晰；不要输出标题以外的多余说明。
+                """.formatted(request.getTitle(), request.getTopic(), request.getSummary(),
+                audienceLabel(request.getAudience()), lengthLabel(request.getLength()), outlineText);
+        return deepSeekService.chatCompletion(completion("FULL_ARTICLE", prompt), AiModuleCode.WRITE).trim();
+    }
+
+    private String generateArticleBySections(AiWriteWizardRequest request)
+    {
+        List<OutlineNodeDTO> outline = request.getOutline();
+        if (CollectionUtils.isEmpty(outline))
+        {
+            return generateArticleSingleShot(request);
+        }
+
+        StringBuilder article = new StringBuilder();
+        article.append("# ").append(request.getTitle()).append("\n\n");
+        if (StringUtils.hasText(request.getSummary()))
+        {
+            article.append("> ").append(request.getSummary().trim()).append("\n\n");
+        }
+
+        int total = outline.size();
+        for (int i = 0; i < total; i++)
+        {
+            OutlineNodeDTO section = outline.get(i);
+            String sectionOutline = outlineToMarkdown(List.of(section));
+            String prompt = """
+                    你正在撰写技术博客的第 %d/%d 章（只写本章，不要重复全文标题，不要写其他章节）。
+                    全文标题：%s
+                    主题：%s
+                    摘要：%s
+                    目标读者：%s
+                    本章大纲：
+                    %s
+                    要求：输出本章 Markdown 正文；可含代码与必要的 ```mermaid；语气专业；不要开场寒暄或「本章完」之类收尾套话。
+                    """.formatted(i + 1, total, request.getTitle(), request.getTopic(), request.getSummary(),
+                    audienceLabel(request.getAudience()), sectionOutline);
+            String sectionMarkdown = deepSeekService.chatCompletion(completion("FULL_ARTICLE", prompt), AiModuleCode.WRITE)
+                    .trim();
+            if (StringUtils.hasText(sectionMarkdown))
+            {
+                article.append(sectionMarkdown).append("\n\n");
+            }
+            log.info("AI write section generated {}/{} task outlineId={}", i + 1, total, section.getId());
+        }
+        return article.toString().trim();
     }
 
     private AiCompletionRequest completion(String scene, String prompt)
@@ -173,9 +245,9 @@ public class AiWriteServiceImpl implements AiWriteService
     {
         return switch (length == null ? "medium" : length)
         {
-            case "short" -> "简洁";
-            case "long" -> "专业长文";
-            default -> "标准";
+            case "short" -> "简洁（约 800～1500 字）";
+            case "long" -> "专业长文（约 4000～8000 字，需分章展开）";
+            default -> "标准（约 2000～3500 字）";
         };
     }
 

@@ -45,21 +45,89 @@ async function loadCategories() {
   categories.value = unwrapList(res)
 }
 
+function stopPoll() {
+  if (pollTimer.value) {
+    clearInterval(pollTimer.value)
+    pollTimer.value = undefined
+  }
+}
+
+function parseJsonResult(raw, fallback) {
+  if (raw == null || raw === '') return fallback
+  if (typeof raw !== 'string') return raw
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * 提交异步智写步骤并轮询任务，直到成功/失败。
+ * @param {() => Promise} submitFn
+ * @param {(task) => void} onSuccess
+ */
+function runAsyncStep(submitFn, onSuccess) {
+  return new Promise(async (resolve, reject) => {
+    stopPoll()
+    loading.value = true
+    try {
+      const res = await submitFn()
+      const payload = res.data
+      const id = payload?.taskId ?? payload?.task_id
+      if (!id) {
+        ElMessage.error('任务创建失败')
+        loading.value = false
+        reject(new Error('no taskId'))
+        return
+      }
+      taskId.value = id
+      pollTimer.value = window.setInterval(async () => {
+        try {
+          const taskRes = await fetchAiTask(id)
+          const task = taskRes.data
+          if (!task) return
+          if (task.status === 2) {
+            stopPoll()
+            loading.value = false
+            onSuccess(task)
+            resolve(task)
+          } else if (task.status === 3) {
+            stopPoll()
+            loading.value = false
+            ElMessage.error(task.errorMessage || '生成失败')
+            reject(new Error(task.errorMessage || 'failed'))
+          }
+        } catch (e) {
+          stopPoll()
+          loading.value = false
+          reject(e)
+        }
+      }, 1500)
+    } catch (e) {
+      loading.value = false
+      reject(e)
+    }
+  })
+}
+
 async function stepTitles() {
   if (!form.topic.trim()) {
     ElMessage.warning('请输入技术主题')
     return
   }
-  loading.value = true
+  ElMessage.info('标题生成中，请稍候…')
   try {
-    const res = await generateTitles(form)
-    titles.value = Array.isArray(res.data) ? res.data : []
-    if (titles.value.length) {
-      form.title = titles.value[0]
-    }
-    step.value = 1
-  } finally {
-    loading.value = false
+    await runAsyncStep(() => generateTitles(form), (task) => {
+      const list = parseJsonResult(task.resultContent, [])
+      titles.value = Array.isArray(list) ? list : []
+      if (titles.value.length) {
+        form.title = titles.value[0]
+      }
+      step.value = 1
+    })
+  } catch {
+    // error already messaged
   }
 }
 
@@ -68,34 +136,27 @@ async function stepSummary() {
     ElMessage.warning('请选择或填写标题')
     return
   }
-  loading.value = true
+  ElMessage.info('摘要生成中，请稍候…')
   try {
-    const res = await generateSummary(form)
-    form.summary = typeof res.data === 'string' ? res.data : ''
-    step.value = 2
-  } finally {
-    loading.value = false
+    await runAsyncStep(() => generateSummary(form), (task) => {
+      form.summary = typeof task.resultContent === 'string' ? task.resultContent : ''
+      step.value = 2
+    })
+  } catch {
+    // error already messaged
   }
 }
 
 async function stepOutline() {
-  loading.value = true
+  ElMessage.info('大纲生成中，资深读者/长文可能需要 1～3 分钟，请勿关闭页面')
   try {
-    if (form.length === 'long' || form.audience === 'senior') {
-      ElMessage.info('大纲生成中，资深读者/长文可能需要 1～3 分钟，请勿关闭页面')
-    }
-    const res = await generateOutline(form)
-    form.outline = Array.isArray(res.data) ? res.data : []
-    step.value = 3
-  } finally {
-    loading.value = false
-  }
-}
-
-function stopPoll() {
-  if (pollTimer.value) {
-    clearInterval(pollTimer.value)
-    pollTimer.value = undefined
+    await runAsyncStep(() => generateOutline(form), (task) => {
+      const outline = parseJsonResult(task.resultContent, [])
+      form.outline = Array.isArray(outline) ? outline : []
+      step.value = 3
+    })
+  } catch {
+    // error already messaged
   }
 }
 

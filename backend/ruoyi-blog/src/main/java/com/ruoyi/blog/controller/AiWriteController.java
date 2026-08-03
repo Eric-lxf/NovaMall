@@ -1,6 +1,5 @@
 package com.ruoyi.blog.controller;
 
-import java.util.List;
 import java.util.Map;
 
 import jakarta.validation.Valid;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ruoyi.blog.dto.AiWriteWizardRequest;
-import com.ruoyi.blog.dto.OutlineNodeDTO;
 import com.ruoyi.blog.service.AiWriteService;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -33,24 +31,24 @@ public class AiWriteController extends BlogControllerSupport
     @PostMapping("/titles")
     public AjaxResult titles(@Valid @RequestBody AiWriteWizardRequest request)
     {
-        List<String> titles = aiWriteService.generateTitles(request);
-        return AjaxResult.success(titles);
+        Long taskId = aiWriteService.submitGenerateTitles(request);
+        return AjaxResult.success(Map.of("taskId", taskId, "async", true));
     }
 
     @Log(title = "AI智写-摘要", businessType = BusinessType.AI, isSaveRequestData = false, isSaveResponseData = false)
     @PostMapping("/summary")
     public AjaxResult summary(@Valid @RequestBody AiWriteWizardRequest request)
     {
-        // 必须显式传入 msg，否则 String 会匹配 success(String msg) 而非 success(Object data)
-        return AjaxResult.success("操作成功", aiWriteService.generateSummary(request));
+        Long taskId = aiWriteService.submitGenerateSummary(request);
+        return AjaxResult.success(Map.of("taskId", taskId, "async", true));
     }
 
     @Log(title = "AI智写-大纲", businessType = BusinessType.AI, isSaveRequestData = false, isSaveResponseData = false)
     @PostMapping("/outline")
     public AjaxResult outline(@Valid @RequestBody AiWriteWizardRequest request)
     {
-        List<OutlineNodeDTO> outline = aiWriteService.generateOutline(request);
-        return AjaxResult.success(outline);
+        Long taskId = aiWriteService.submitGenerateOutline(request);
+        return AjaxResult.success(Map.of("taskId", taskId, "async", true));
     }
 
     @Log(title = "AI智写-全文", businessType = BusinessType.AI, isSaveRequestData = false, isSaveResponseData = false)
@@ -58,6 +56,6 @@ public class AiWriteController extends BlogControllerSupport
     public AjaxResult generate(@Valid @RequestBody AiWriteWizardRequest request)
     {
         Long taskId = aiWriteService.submitGenerateArticle(request);
-        return AjaxResult.success(Map.of("taskId", taskId));
+        return AjaxResult.success(Map.of("taskId", taskId, "async", true));
     }
 }

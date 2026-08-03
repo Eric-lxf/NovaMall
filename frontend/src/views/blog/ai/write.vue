@@ -1,5 +1,7 @@
 <script setup>
-import { reactive, ref } from 'vue'
+defineOptions({ name: 'BlogAiWrite' })
+
+import { onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import OutlineEditor from '@/components/ai/OutlineEditor.vue'
@@ -12,6 +14,11 @@ import {
 } from '@/api/blog/aiWrite'
 import { fetchCategories } from '@/api/blog/category'
 
+/** 异步智写轮询：状态兼容字符串/数字；超时后给出明确失败而非无限 loading */
+const POLL_INTERVAL_MS = 1500
+const POLL_MAX_MS = 10 * 60 * 1000
+const ARTICLE_POLL_INTERVAL_MS = 2000
+
 const router = useRouter()
 const step = ref(0)
 const loading = ref(false)
@@ -19,6 +26,11 @@ const titles = ref([])
 const categories = ref([])
 const taskId = ref()
 const pollTimer = ref(undefined)
+const pollDeadline = ref(0)
+
+onUnmounted(() => {
+  stopPoll()
+})
 
 const form = reactive({
   topic: '',
@@ -50,6 +62,7 @@ function stopPoll() {
     clearInterval(pollTimer.value)
     pollTimer.value = undefined
   }
+  pollDeadline.value = 0
 }
 
 function parseJsonResult(raw, fallback) {
@@ -62,52 +75,80 @@ function parseJsonResult(raw, fallback) {
   }
 }
 
+function taskStatus(task) {
+  const n = Number(task?.status)
+  return Number.isFinite(n) ? n : -1
+}
+
 /**
  * 提交异步智写步骤并轮询任务，直到成功/失败。
  * @param {() => Promise} submitFn
  * @param {(task) => void} onSuccess
  */
 function runAsyncStep(submitFn, onSuccess) {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     stopPoll()
     loading.value = true
-    try {
-      const res = await submitFn()
-      const payload = res.data
-      const id = payload?.taskId ?? payload?.task_id
-      if (!id) {
-        ElMessage.error('任务创建失败')
-        loading.value = false
-        reject(new Error('no taskId'))
-        return
-      }
-      taskId.value = id
-      pollTimer.value = window.setInterval(async () => {
-        try {
-          const taskRes = await fetchAiTask(id)
-          const task = taskRes.data
-          if (!task) return
-          if (task.status === 2) {
-            stopPoll()
-            loading.value = false
-            onSuccess(task)
-            resolve(task)
-          } else if (task.status === 3) {
-            stopPoll()
-            loading.value = false
-            ElMessage.error(task.errorMessage || '生成失败')
-            reject(new Error(task.errorMessage || 'failed'))
-          }
-        } catch (e) {
-          stopPoll()
+    ;(async () => {
+      try {
+        const res = await submitFn()
+        const payload = res?.data ?? res
+        const id = payload?.taskId ?? payload?.task_id
+        if (!id) {
+          ElMessage.error('任务创建失败')
           loading.value = false
-          reject(e)
+          reject(new Error('no taskId'))
+          return
         }
-      }, 1500)
-    } catch (e) {
-      loading.value = false
-      reject(e)
-    }
+        taskId.value = id
+        pollDeadline.value = Date.now() + POLL_MAX_MS
+        let inFlight = false
+
+        const tick = async () => {
+          if (inFlight) return
+          inFlight = true
+          try {
+            if (pollDeadline.value && Date.now() > pollDeadline.value) {
+              stopPoll()
+              loading.value = false
+              ElMessage.error('生成超时，请稍后重试或检查 AI 模型配置')
+              reject(new Error('poll timeout'))
+              return
+            }
+            const taskRes = await fetchAiTask(id)
+            const task = taskRes?.data ?? taskRes
+            if (!task) return
+            const status = taskStatus(task)
+            if (status === 2) {
+              stopPoll()
+              loading.value = false
+              onSuccess(task)
+              resolve(task)
+            } else if (status === 3) {
+              stopPoll()
+              loading.value = false
+              ElMessage.error(task.errorMessage || '生成失败')
+              reject(new Error(task.errorMessage || 'failed'))
+            }
+          } catch (e) {
+            stopPoll()
+            loading.value = false
+            reject(e)
+          } finally {
+            inFlight = false
+          }
+        }
+
+        await tick()
+        // 首轮已成功/失败时 loading 已关，勿再开定时器
+        if (loading.value && pollTimer.value === undefined) {
+          pollTimer.value = window.setInterval(tick, POLL_INTERVAL_MS)
+        }
+      } catch (e) {
+        loading.value = false
+        reject(e)
+      }
+    })()
   })
 }
 
@@ -162,17 +203,33 @@ async function stepOutline() {
 
 function startPoll(id) {
   stopPoll()
-  pollTimer.value = window.setInterval(async () => {
+  pollDeadline.value = Date.now() + POLL_MAX_MS
+  let inFlight = false
+
+  const tick = async () => {
+    if (inFlight) return
+    inFlight = true
     try {
-      const res = await fetchAiTask(id)
-      const task = res.data
-      if (!task) return
-      if (task.status === 2 && task.targetArticleId) {
+      if (pollDeadline.value && Date.now() > pollDeadline.value) {
         stopPoll()
         loading.value = false
-        ElMessage.success(form.publish ? '文章已发布' : '草稿已生成')
-        router.push({ path: '/blog-admin/article/edit', query: { id: String(task.targetArticleId) } })
-      } else if (task.status === 3) {
+        ElMessage.error('正文生成超时，请稍后在文章管理中查看是否已生成草稿')
+        return
+      }
+      const res = await fetchAiTask(id)
+      const task = res?.data ?? res
+      if (!task) return
+      const status = taskStatus(task)
+      if (status === 2) {
+        stopPoll()
+        loading.value = false
+        if (task.targetArticleId) {
+          ElMessage.success(form.publish ? '文章已发布' : '草稿已生成')
+          router.push({ path: '/blog-admin/article/edit', query: { id: String(task.targetArticleId) } })
+        } else {
+          ElMessage.warning('任务已完成，但未返回文章 ID，请到文章管理查看')
+        }
+      } else if (status === 3) {
         stopPoll()
         loading.value = false
         ElMessage.error(task.errorMessage || '生成失败')
@@ -180,8 +237,13 @@ function startPoll(id) {
     } catch {
       stopPoll()
       loading.value = false
+    } finally {
+      inFlight = false
     }
-  }, 2000)
+  }
+
+  tick()
+  pollTimer.value = window.setInterval(tick, ARTICLE_POLL_INTERVAL_MS)
 }
 
 async function stepGenerate() {

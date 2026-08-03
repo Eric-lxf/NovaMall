@@ -110,10 +110,10 @@ public class AiWriteServiceImpl implements AiWriteService
                 String result = runner.get();
                 aiTaskService.markSuccess(taskId, null, result);
             }
-            catch (Exception e)
+            catch (Throwable e)
             {
                 log.error("AI write step failed, taskType={}, taskId={}", taskType, taskId, e);
-                aiTaskService.markFailed(taskId, e.getMessage());
+                aiTaskService.markFailed(taskId, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             }
         });
         return taskId;
@@ -202,10 +202,10 @@ public class AiWriteServiceImpl implements AiWriteService
             Long articleId = aiWriteArticlePersistence.saveGeneratedDraft(request, content);
             aiTaskService.markSuccess(taskId, articleId, content);
         }
-        catch (Exception e)
+        catch (Throwable e)
         {
             log.error("Generate article task failed, taskId={}", taskId, e);
-            aiTaskService.markFailed(taskId, e.getMessage());
+            aiTaskService.markFailed(taskId, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         }
     }
 

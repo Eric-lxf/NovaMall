@@ -1,4 +1,6 @@
 <script setup>
+defineOptions({ name: 'BlogAiOptimize' })
+
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -17,16 +19,35 @@ const temperature = ref(0.7)
 const templates = ref([])
 
 async function loadTemplates() {
-  const res = await fetchAiTemplates()
-  const list = res?.data
-  templates.value = Array.isArray(list) ? list : []
+  try {
+    const res = await fetchAiTemplates()
+    const list = res?.data
+    templates.value = Array.isArray(list) ? list : []
+    if (!templates.value.length) {
+      templates.value = [
+        { sceneType: 'REWRITE', templateName: '技术文档润色' },
+        { sceneType: 'EXPAND', templateName: '扩写' },
+        { sceneType: 'SHORTEN', templateName: '缩写' },
+      ]
+    }
+  } catch {
+    templates.value = [
+      { sceneType: 'REWRITE', templateName: '技术文档润色' },
+      { sceneType: 'EXPAND', templateName: '扩写' },
+      { sceneType: 'SHORTEN', templateName: '缩写' },
+    ]
+  }
 }
 
 async function loadPrompt() {
-  const res = await fetchPromptTemplate(scene.value)
-  systemPrompt.value = res.data?.systemPrompt || ''
-  if (res.data?.temperature != null) {
-    temperature.value = Number(res.data.temperature)
+  try {
+    const res = await fetchPromptTemplate(scene.value)
+    systemPrompt.value = res.data?.systemPrompt || ''
+    if (res.data?.temperature != null) {
+      temperature.value = Number(res.data.temperature)
+    }
+  } catch {
+    // 模板接口无权限时仍可手工填写 System Prompt
   }
 }
 

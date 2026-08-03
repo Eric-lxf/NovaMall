@@ -47,7 +47,7 @@ public class AiController extends BlogControllerSupport
 
     private final AiProviderService aiProviderService;
 
-    @PreAuthorize("@ss.hasPermi('blog:ai:chat')")
+    @PreAuthorize("@ss.hasPermi('blog:ai:chat') or @ss.hasPermi('blog:ai:optimize') or @ss.hasPermi('blog:ai:write')")
     @GetMapping("/templates")
     public AjaxResult templates()
     {
@@ -55,7 +55,7 @@ public class AiController extends BlogControllerSupport
         return AjaxResult.success(list);
     }
 
-    @PreAuthorize("@ss.hasPermi('blog:ai:chat')")
+    @PreAuthorize("@ss.hasPermi('blog:ai:chat') or @ss.hasPermi('blog:ai:optimize') or @ss.hasPermi('blog:ai:write')")
     @GetMapping("/templates/{scene}")
     public AjaxResult templateDetail(@PathVariable String scene)
     {

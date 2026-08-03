@@ -57,7 +57,69 @@ public class AiWriteServiceImpl implements AiWriteService
     }
 
     @Override
-    public List<String> generateTitles(AiWriteWizardRequest request)
+    public Long submitGenerateTitles(AiWriteWizardRequest request)
+    {
+        return submitWizardStep("GENERATE_TITLES", request, () -> {
+            try
+            {
+                return objectMapper.writeValueAsString(doGenerateTitles(request));
+            }
+            catch (Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Override
+    public Long submitGenerateSummary(AiWriteWizardRequest request)
+    {
+        return submitWizardStep("GENERATE_SUMMARY", request, () -> doGenerateSummary(request));
+    }
+
+    @Override
+    public Long submitGenerateOutline(AiWriteWizardRequest request)
+    {
+        return submitWizardStep("GENERATE_OUTLINE", request, () -> {
+            try
+            {
+                return objectMapper.writeValueAsString(doGenerateOutline(request));
+            }
+            catch (Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    private Long submitWizardStep(String taskType, AiWriteWizardRequest request, java.util.function.Supplier<String> runner)
+    {
+        Long taskId;
+        try
+        {
+            taskId = aiTaskService.createTask(taskType, objectMapper.writeValueAsString(request));
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException(e);
+        }
+        aiTaskExecutor.execute(() -> {
+            aiTaskService.markRunning(taskId);
+            try
+            {
+                String result = runner.get();
+                aiTaskService.markSuccess(taskId, null, result);
+            }
+            catch (Exception e)
+            {
+                log.error("AI write step failed, taskType={}, taskId={}", taskType, taskId, e);
+                aiTaskService.markFailed(taskId, e.getMessage());
+            }
+        });
+        return taskId;
+    }
+
+    private List<String> doGenerateTitles(AiWriteWizardRequest request)
     {
         String prompt = """
                 技术主题：%s
@@ -70,8 +132,7 @@ public class AiWriteServiceImpl implements AiWriteService
         return parseStringList(raw);
     }
 
-    @Override
-    public String generateSummary(AiWriteWizardRequest request)
+    private String doGenerateSummary(AiWriteWizardRequest request)
     {
         String prompt = """
                 技术主题：%s
@@ -82,8 +143,7 @@ public class AiWriteServiceImpl implements AiWriteService
         return deepSeekService.chatCompletion(completion("SUMMARY", prompt), AiModuleCode.WRITE).trim();
     }
 
-    @Override
-    public List<OutlineNodeDTO> generateOutline(AiWriteWizardRequest request)
+    private List<OutlineNodeDTO> doGenerateOutline(AiWriteWizardRequest request)
     {
         String lengthHint = switch (request.getLength() == null ? "medium" : request.getLength())
         {

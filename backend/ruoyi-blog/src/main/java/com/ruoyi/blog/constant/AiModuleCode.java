@@ -10,8 +10,10 @@ public final class AiModuleCode
     public static final String COMMENT_MODERATE = "comment_moderate";
     public static final String BILL_VISION = "bill_vision";
     public static final String BILL_ADVICE = "bill_advice";
+    public static final String HISTORY_EXTRACT = "history_extract";
 
-    private static final List<String> ALL = List.of(EDITOR, WRITE, OPTIMIZE, COMMENT_MODERATE, BILL_VISION, BILL_ADVICE);
+    private static final List<String> ALL = List.of(
+            EDITOR, WRITE, OPTIMIZE, COMMENT_MODERATE, BILL_VISION, BILL_ADVICE, HISTORY_EXTRACT);
 
     private AiModuleCode()
     {

@@ -28,6 +28,12 @@
           <div class="entry-hint">上传识别微信/银行账单</div>
         </el-card>
       </el-col>
+      <el-col :xs="24" :sm="12" :md="8">
+        <el-card shadow="hover" class="entry-card" @click="openPublicHistory">
+          <div class="entry-title">历史学习</div>
+          <div class="entry-hint">时间线、事件与知识审核</div>
+        </el-card>
+      </el-col>
     </el-row>
   </div>
 </template>
@@ -37,6 +43,10 @@ const router = useRouter()
 
 function openPublicBlog() {
   window.open('/blog', '_blank')
+}
+
+function openPublicHistory() {
+  window.open('/history', '_blank')
 }
 
 function goPath(path) {

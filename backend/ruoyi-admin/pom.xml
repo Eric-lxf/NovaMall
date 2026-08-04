@@ -80,6 +80,12 @@
             <artifactId>ruoyi-mall-payment</artifactId>
         </dependency>
 
+        <!-- AI 历史学习平台 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-history</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>

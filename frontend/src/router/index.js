@@ -140,6 +140,31 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/history',
+    hidden: true,
+    component: () => import('@/layout/HistoryPublicLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'HistoryPublicHome',
+        component: () => import('@/views/public/history/index.vue'),
+        meta: { title: '历史学习' }
+      },
+      {
+        path: 'timeline',
+        name: 'HistoryPublicTimeline',
+        component: () => import('@/views/public/history/timeline.vue'),
+        meta: { title: '历史时间线' }
+      },
+      {
+        path: 'events/:id(\\d+)',
+        name: 'HistoryPublicEvent',
+        component: () => import('@/views/public/history/event-detail.vue'),
+        meta: { title: '事件详情' }
+      }
+    ]
+  },
+  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true

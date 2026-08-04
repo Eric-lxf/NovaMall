@@ -141,6 +141,13 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <!-- AI 历史学习平台 -->
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>ruoyi-history</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- io常用工具类 -->
             <dependency>
                 <groupId>commons-io</groupId>
@@ -233,6 +240,7 @@
         <module>ruoyi-mall-product</module>
         <module>ruoyi-mall-trade</module>
         <module>ruoyi-mall-payment</module>
+        <module>ruoyi-history</module>
     </modules>
     <packaging>pom</packaging>
 

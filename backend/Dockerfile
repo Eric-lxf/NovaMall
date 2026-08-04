@@ -12,6 +12,7 @@ COPY backend/ruoyi-wechat ./ruoyi-wechat
 COPY backend/ruoyi-mall-product ./ruoyi-mall-product
 COPY backend/ruoyi-mall-trade ./ruoyi-mall-trade
 COPY backend/ruoyi-mall-payment ./ruoyi-mall-payment
+COPY backend/ruoyi-history ./ruoyi-history
 RUN mvn -B -DskipTests package -pl ruoyi-admin -am
 
 FROM crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/lxf_ai/maven:3.9-eclipse-temurin-17

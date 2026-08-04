@@ -157,6 +157,18 @@ export const constantRoutes = [
         meta: { title: '历史时间线' }
       },
       {
+        path: 'countries',
+        name: 'HistoryPublicCountries',
+        component: () => import('@/views/public/history/countries.vue'),
+        meta: { title: '国家与朝代' }
+      },
+      {
+        path: 'countries/:id(\\d+)',
+        name: 'HistoryPublicCountry',
+        component: () => import('@/views/public/history/country-detail.vue'),
+        meta: { title: '国家详情' }
+      },
+      {
         path: 'events/:id(\\d+)',
         name: 'HistoryPublicEvent',
         component: () => import('@/views/public/history/event-detail.vue'),

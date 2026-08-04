@@ -35,6 +35,10 @@ public class HistoryPeriodServiceImpl implements HistoryPeriodService
         {
             wrapper.like(HistoryPeriod::getName, query.getName().trim());
         }
+        if (query.getCountryId() != null)
+        {
+            wrapper.eq(HistoryPeriod::getCountryId, query.getCountryId());
+        }
         if (StringUtils.hasText(query.getStatus()))
         {
             wrapper.eq(HistoryPeriod::getStatus, query.getStatus().trim());
@@ -104,6 +108,7 @@ public class HistoryPeriodServiceImpl implements HistoryPeriodService
     {
         period.setName(request.getName());
         period.setAlias(request.getAlias());
+        period.setCountryId(request.getCountryId());
         period.setStartYear(request.getStartYear());
         period.setEndYear(request.getEndYear());
         period.setDatePrecision(StringUtils.hasText(request.getDatePrecision())

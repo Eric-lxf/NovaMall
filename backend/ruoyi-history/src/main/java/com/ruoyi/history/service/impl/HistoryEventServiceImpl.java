@@ -18,9 +18,11 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.history.constant.HistoryConstants;
 import com.ruoyi.history.domain.HistoryEvent;
+import com.ruoyi.history.domain.HistoryPeriod;
 import com.ruoyi.history.dto.HistoryEventPageQuery;
 import com.ruoyi.history.dto.HistoryEventSaveRequest;
 import com.ruoyi.history.dto.HistoryTimelineQuery;
+import com.ruoyi.history.mapper.HistoryCountryMapper;
 import com.ruoyi.history.mapper.HistoryEventMapper;
 import com.ruoyi.history.mapper.HistoryPeriodMapper;
 import com.ruoyi.history.mapper.HistoryPlaceMapper;
@@ -36,6 +38,7 @@ public class HistoryEventServiceImpl implements HistoryEventService
     private final HistoryEventMapper historyEventMapper;
     private final HistoryPeriodMapper historyPeriodMapper;
     private final HistoryPlaceMapper historyPlaceMapper;
+    private final HistoryCountryMapper historyCountryMapper;
 
     @Override
     public Page<HistoryEvent> page(HistoryEventPageQuery query)
@@ -107,6 +110,19 @@ public class HistoryEventServiceImpl implements HistoryEventService
         {
             wrapper.eq(HistoryEvent::getPeriodId, query.getPeriodId());
         }
+        else if (query.getCountryId() != null)
+        {
+            List<HistoryPeriod> periods = historyPeriodMapper.selectList(new LambdaQueryWrapper<HistoryPeriod>()
+                    .select(HistoryPeriod::getId)
+                    .eq(HistoryPeriod::getCountryId, query.getCountryId())
+                    .eq(HistoryPeriod::getStatus, HistoryConstants.STATUS_NORMAL));
+            if (periods.isEmpty())
+            {
+                return List.of();
+            }
+            List<Long> periodIds = periods.stream().map(HistoryPeriod::getId).collect(Collectors.toList());
+            wrapper.in(HistoryEvent::getPeriodId, periodIds);
+        }
         if (query.getYearFrom() != null)
         {
             wrapper.ge(HistoryEvent::getStartYear, query.getYearFrom());
@@ -128,10 +144,19 @@ public class HistoryEventServiceImpl implements HistoryEventService
         }
         Set<Long> periodIds = events.stream().map(HistoryEvent::getPeriodId).filter(Objects::nonNull).collect(Collectors.toSet());
         Set<Long> placeIds = events.stream().map(HistoryEvent::getPlaceId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<Long, String> periodNames = new HashMap<>();
+        Map<Long, HistoryPeriod> periodMap = new HashMap<>();
         if (!periodIds.isEmpty())
         {
-            historyPeriodMapper.selectBatchIds(periodIds).forEach(p -> periodNames.put(p.getId(), p.getName()));
+            historyPeriodMapper.selectBatchIds(periodIds).forEach(p -> periodMap.put(p.getId(), p));
+        }
+        Set<Long> countryIds = periodMap.values().stream()
+                .map(HistoryPeriod::getCountryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> countryNames = new HashMap<>();
+        if (!countryIds.isEmpty())
+        {
+            historyCountryMapper.selectBatchIds(countryIds).forEach(c -> countryNames.put(c.getId(), c.getName()));
         }
         Map<Long, String> placeNames = new HashMap<>();
         if (!placeIds.isEmpty())
@@ -145,7 +170,13 @@ public class HistoryEventServiceImpl implements HistoryEventService
             item.setId(event.getId());
             item.setTitle(event.getTitle());
             item.setPeriodId(event.getPeriodId());
-            item.setPeriodName(event.getPeriodId() == null ? null : periodNames.get(event.getPeriodId()));
+            HistoryPeriod period = event.getPeriodId() == null ? null : periodMap.get(event.getPeriodId());
+            item.setPeriodName(period == null ? null : period.getName());
+            if (period != null && period.getCountryId() != null)
+            {
+                item.setCountryId(period.getCountryId());
+                item.setCountryName(countryNames.get(period.getCountryId()));
+            }
             item.setPlaceId(event.getPlaceId());
             item.setPlaceName(event.getPlaceId() == null ? null : placeNames.get(event.getPlaceId()));
             item.setStartYear(event.getStartYear());

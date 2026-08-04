@@ -28,6 +28,7 @@ import com.ruoyi.history.dto.HistorySourceImportRequest;
 import com.ruoyi.history.dto.HistorySourcePageQuery;
 import com.ruoyi.history.dto.HistoryProgressSaveRequest;
 import com.ruoyi.history.dto.HistoryTimelineQuery;
+import com.ruoyi.history.service.HistoryCountryService;
 import com.ruoyi.history.service.HistoryEventService;
 import com.ruoyi.history.service.HistoryExtractService;
 import com.ruoyi.history.service.HistoryPathService;
@@ -49,6 +50,7 @@ public class HistoryLearningController extends HistoryControllerSupport
     private final HistoryUnitService historyUnitService;
     private final HistoryPathService historyPathService;
     private final HistoryProgressService historyProgressService;
+    private final HistoryCountryService historyCountryService;
 
     /** C 端时间线：仅已发布事件 */
     @Anonymous
@@ -56,6 +58,20 @@ public class HistoryLearningController extends HistoryControllerSupport
     public AjaxResult timeline(@Valid HistoryTimelineQuery query)
     {
         return AjaxResult.success(historyEventService.timeline(query));
+    }
+
+    @Anonymous
+    @GetMapping("/countries/public")
+    public AjaxResult publicCountries()
+    {
+        return AjaxResult.success(historyCountryService.listPublic());
+    }
+
+    @Anonymous
+    @GetMapping("/countries/{id}/public")
+    public AjaxResult publicCountry(@PathVariable Long id)
+    {
+        return AjaxResult.success(historyCountryService.getPublicDetail(id));
     }
 
     @Anonymous

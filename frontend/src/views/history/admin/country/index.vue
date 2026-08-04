@@ -1,16 +1,15 @@
 <script setup>
-defineOptions({ name: 'HistoryAdminPeriod' })
+defineOptions({ name: 'HistoryAdminCountry' })
 
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  addHistoryPeriod,
-  delHistoryPeriod,
-  getHistoryPeriod,
-  listHistoryPeriod,
-  updateHistoryPeriod
-} from '@/api/history/period'
-import { listHistoryCountryOptions } from '@/api/history/country'
+  addHistoryCountry,
+  delHistoryCountry,
+  getHistoryCountry,
+  listHistoryCountry,
+  updateHistoryCountry
+} from '@/api/history/country'
 
 const loading = ref(false)
 const dataList = ref([])
@@ -18,49 +17,32 @@ const total = ref(0)
 const open = ref(false)
 const title = ref('')
 const formRef = ref()
-const countryOptions = ref([])
-const countryNameMap = ref({})
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
   name: '',
-  countryId: undefined,
+  region: undefined,
   status: undefined
 })
 const form = reactive({
   id: undefined,
   name: '',
   alias: '',
-  countryId: undefined,
-  startYear: undefined,
-  endYear: undefined,
-  datePrecision: 'YEAR',
-  originalDateText: '',
-  calendarType: '中国传统纪年',
-  isApproximate: false,
+  region: '',
+  periodLabel: '时期',
   summary: '',
   sort: 0,
   status: '0',
   remark: ''
 })
 const rules = {
-  name: [{ required: true, message: '时期名称不能为空', trigger: 'blur' }]
-}
-
-async function loadCountries() {
-  const res = await listHistoryCountryOptions()
-  countryOptions.value = res.data || []
-  const map = {}
-  countryOptions.value.forEach((c) => {
-    map[c.id] = c.name
-  })
-  countryNameMap.value = map
+  name: [{ required: true, message: '国家名称不能为空', trigger: 'blur' }]
 }
 
 async function getList() {
   loading.value = true
   try {
-    const res = await listHistoryPeriod(queryParams)
+    const res = await listHistoryCountry(queryParams)
     dataList.value = res.rows || []
     total.value = res.total || 0
   } finally {
@@ -73,13 +55,8 @@ function resetForm() {
     id: undefined,
     name: '',
     alias: '',
-    countryId: undefined,
-    startYear: undefined,
-    endYear: undefined,
-    datePrecision: 'YEAR',
-    originalDateText: '',
-    calendarType: '中国传统纪年',
-    isApproximate: false,
+    region: '',
+    periodLabel: '时期',
     summary: '',
     sort: 0,
     status: '0',
@@ -94,27 +71,27 @@ function handleQuery() {
 }
 
 function resetQuery() {
-  Object.assign(queryParams, { pageNum: 1, pageSize: 10, name: '', countryId: undefined, status: undefined })
+  Object.assign(queryParams, { pageNum: 1, pageSize: 10, name: '', region: undefined, status: undefined })
   getList()
 }
 
 function handleAdd() {
   resetForm()
-  title.value = '新增时期'
+  title.value = '新增国家'
   open.value = true
 }
 
 async function handleUpdate(row) {
   resetForm()
-  const res = await getHistoryPeriod(row.id)
+  const res = await getHistoryCountry(row.id)
   Object.assign(form, res.data || row)
-  title.value = '修改时期'
+  title.value = '修改国家'
   open.value = true
 }
 
 async function handleDelete(row) {
-  await ElMessageBox.confirm(`确认删除时期「${row.name}」吗？`, '提示', { type: 'warning' })
-  await delHistoryPeriod(row.id)
+  await ElMessageBox.confirm(`确认删除国家「${row.name}」吗？`, '提示', { type: 'warning' })
+  await delHistoryCountry(row.id)
   ElMessage.success('删除成功')
   getList()
 }
@@ -122,19 +99,16 @@ async function handleDelete(row) {
 async function submitForm() {
   await formRef.value.validate()
   if (form.id) {
-    await updateHistoryPeriod(form)
+    await updateHistoryCountry(form)
   } else {
-    await addHistoryPeriod(form)
+    await addHistoryCountry(form)
   }
   ElMessage.success('保存成功')
   open.value = false
   getList()
 }
 
-onMounted(async () => {
-  await loadCountries()
-  await getList()
-})
+onMounted(getList)
 </script>
 
 <template>
@@ -144,10 +118,8 @@ onMounted(async () => {
         <el-form-item label="名称">
           <el-input v-model="queryParams.name" clearable @keyup.enter="handleQuery" />
         </el-form-item>
-        <el-form-item label="国家">
-          <el-select v-model="queryParams.countryId" clearable style="width: 160px">
-            <el-option v-for="c in countryOptions" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
+        <el-form-item label="区域">
+          <el-input v-model="queryParams.region" clearable style="width: 140px" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="queryParams.status" clearable style="width: 120px">
@@ -162,19 +134,14 @@ onMounted(async () => {
       </el-form>
 
       <el-row class="mb8">
-        <el-button type="primary" plain icon="Plus" v-hasPermi="['history:period:add']" @click="handleAdd">新增</el-button>
+        <el-button type="primary" plain icon="Plus" v-hasPermi="['history:country:add']" @click="handleAdd">新增</el-button>
       </el-row>
 
       <el-table v-loading="loading" :data="dataList" stripe>
         <el-table-column prop="name" label="名称" min-width="120" />
-        <el-table-column label="国家" width="120">
-          <template #default="{ row }">{{ countryNameMap[row.countryId] || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="alias" label="别名" min-width="140" show-overflow-tooltip />
-        <el-table-column label="起止年" width="140" align="center">
-          <template #default="{ row }">{{ row.startYear }} ~ {{ row.endYear }}</template>
-        </el-table-column>
-        <el-table-column prop="datePrecision" label="精度" width="110" />
+        <el-table-column prop="alias" label="别名" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="region" label="区域" width="120" />
+        <el-table-column prop="periodLabel" label="时期称呼" width="110" />
         <el-table-column prop="sort" label="排序" width="80" align="center" />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
@@ -183,8 +150,8 @@ onMounted(async () => {
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link type="primary" v-hasPermi="['history:period:edit']" @click="handleUpdate(row)">修改</el-button>
-            <el-button link type="danger" v-hasPermi="['history:period:remove']" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="primary" v-hasPermi="['history:country:edit']" @click="handleUpdate(row)">修改</el-button>
+            <el-button link type="danger" v-hasPermi="['history:country:remove']" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -203,36 +170,18 @@ onMounted(async () => {
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" maxlength="64" />
         </el-form-item>
-        <el-form-item label="所属国家">
-          <el-select v-model="form.countryId" clearable style="width: 100%">
-            <el-option v-for="c in countryOptions" :key="c.id" :label="`${c.name}（${c.periodLabel || '时期'}）`" :value="c.id" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="别名">
           <el-input v-model="form.alias" maxlength="128" />
         </el-form-item>
-        <el-form-item label="起始年">
-          <el-input-number v-model="form.startYear" controls-position="right" />
+        <el-form-item label="区域">
+          <el-input v-model="form.region" placeholder="如东亚 / 北非 / 北美" maxlength="64" />
         </el-form-item>
-        <el-form-item label="结束年">
-          <el-input-number v-model="form.endYear" controls-position="right" />
-        </el-form-item>
-        <el-form-item label="时间精度">
-          <el-select v-model="form.datePrecision" style="width: 100%">
-            <el-option label="YEAR" value="YEAR" />
-            <el-option label="CENTURY" value="CENTURY" />
-            <el-option label="APPROXIMATE" value="APPROXIMATE" />
-            <el-option label="PERIOD" value="PERIOD" />
+        <el-form-item label="时期称呼">
+          <el-select v-model="form.periodLabel" style="width: 100%">
+            <el-option label="朝代" value="朝代" />
+            <el-option label="王朝" value="王朝" />
+            <el-option label="时期" value="时期" />
           </el-select>
-        </el-form-item>
-        <el-form-item label="原始纪年">
-          <el-input v-model="form.originalDateText" />
-        </el-form-item>
-        <el-form-item label="历法">
-          <el-input v-model="form.calendarType" />
-        </el-form-item>
-        <el-form-item label="约数">
-          <el-switch v-model="form.isApproximate" />
         </el-form-item>
         <el-form-item label="简介">
           <el-input v-model="form.summary" type="textarea" :rows="3" />

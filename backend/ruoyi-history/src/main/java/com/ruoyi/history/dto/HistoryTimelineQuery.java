@@ -8,6 +8,7 @@ import lombok.Data;
 public class HistoryTimelineQuery
 {
     private Long periodId;
+    private Long countryId;
     private Integer yearFrom;
     private Integer yearTo;
 

@@ -9,20 +9,15 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 @Data
-@TableName("history_period")
-public class HistoryPeriod
+@TableName("history_country")
+public class HistoryCountry
 {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String name;
     private String alias;
-    private Long countryId;
-    private Integer startYear;
-    private Integer endYear;
-    private String datePrecision;
-    private String originalDateText;
-    private String calendarType;
-    private Boolean isApproximate;
+    private String region;
+    private String periodLabel;
     private String summary;
     private Integer sort;
     private String status;

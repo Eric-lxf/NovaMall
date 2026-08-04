@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 @Data
-public class HistoryPeriodPageQuery
+public class HistoryCountryPageQuery
 {
     @Min(1)
     private Integer pageNum = 1;
@@ -15,6 +15,6 @@ public class HistoryPeriodPageQuery
     private Integer pageSize = 10;
 
     private String name;
-    private Long countryId;
+    private String region;
     private String status;
 }

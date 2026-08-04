@@ -11,6 +11,7 @@ import {
   publishHistoryEvent,
   updateHistoryEvent
 } from '@/api/history/event'
+import { generateHistoryUnitFromEvent } from '@/api/history/unit'
 import { listHistoryPeriodOptions } from '@/api/history/period'
 import { listHistoryPlaceOptions } from '@/api/history/place'
 
@@ -129,6 +130,12 @@ async function handlePublish(row) {
   getList()
 }
 
+async function handleGenerateUnit(row) {
+  await ElMessageBox.confirm(`根据事件「${row.title}」生成学习单元草稿？`, '提示', { type: 'info' })
+  const res = await generateHistoryUnitFromEvent(row.id)
+  ElMessage.success(`已生成草稿单元 #${res.data}，请到「学习单元」编辑并发布`)
+}
+
 async function submitForm() {
   await formRef.value.validate()
   if (form.id) {
@@ -183,7 +190,7 @@ onMounted(async () => {
         </el-table-column>
         <el-table-column prop="auditStatus" label="审核" width="120" />
         <el-table-column prop="summary" label="摘要" min-width="200" show-overflow-tooltip />
-        <el-table-column label="操作" width="220" fixed="right" align="center">
+        <el-table-column label="操作" width="280" fixed="right" align="center">
           <template #default="{ row }">
             <el-button link type="primary" v-hasPermi="['history:event:edit']" @click="handleUpdate(row)">修改</el-button>
             <el-button
@@ -193,6 +200,13 @@ onMounted(async () => {
               v-hasPermi="['history:event:publish']"
               @click="handlePublish(row)"
             >发布</el-button>
+            <el-button
+              link
+              type="warning"
+              v-if="row.auditStatus === 'PUBLISHED'"
+              v-hasPermi="['history:unit:add']"
+              @click="handleGenerateUnit(row)"
+            >生成单元</el-button>
             <el-button link type="danger" v-hasPermi="['history:event:remove']" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>

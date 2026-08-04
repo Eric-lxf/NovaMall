@@ -3,10 +3,31 @@ USE nova_mall;
 
 -- AI 历史学习平台：独立 history_ 表前缀，不复用 blog_/mall_ 模型
 
+CREATE TABLE IF NOT EXISTS `history_country` (
+  `id`           bigint       NOT NULL AUTO_INCREMENT COMMENT '国家/文明ID',
+  `name`         varchar(64)  NOT NULL COMMENT '名称，如中国、埃及、美国',
+  `alias`        varchar(128) DEFAULT NULL COMMENT '别名',
+  `region`       varchar(64)  DEFAULT NULL COMMENT '区域，如东亚/北非/北美',
+  `period_label` varchar(32)  NOT NULL DEFAULT '时期' COMMENT '时期称呼：朝代/王朝/时期',
+  `summary`      varchar(1000) DEFAULT NULL COMMENT '简介',
+  `sort`         int          NOT NULL DEFAULT 0 COMMENT '排序',
+  `status`       char(1)      NOT NULL DEFAULT '0' COMMENT '0正常 1停用',
+  `create_by`    varchar(64)  DEFAULT '' COMMENT '创建者',
+  `create_time`  datetime     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_by`    varchar(64)  DEFAULT '' COMMENT '更新者',
+  `update_time`  datetime     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `remark`       varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_history_country_name` (`name`),
+  KEY `idx_history_country_region` (`region`),
+  KEY `idx_history_country_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='历史国家/文明';
+
 CREATE TABLE IF NOT EXISTS `history_period` (
   `id`                 bigint       NOT NULL AUTO_INCREMENT COMMENT '时期ID',
   `name`               varchar(64)  NOT NULL COMMENT '时期名称，如秦汉',
   `alias`              varchar(128) DEFAULT NULL COMMENT '别名',
+  `country_id`         bigint       DEFAULT NULL COMMENT '所属国家/文明',
   `start_year`         int          DEFAULT NULL COMMENT '起始年（负数为公元前）',
   `end_year`           int          DEFAULT NULL COMMENT '结束年',
   `date_precision`     varchar(32)  NOT NULL DEFAULT 'YEAR' COMMENT 'YEAR/CENTURY/APPROXIMATE/PERIOD',
@@ -23,7 +44,8 @@ CREATE TABLE IF NOT EXISTS `history_period` (
   `remark`             varchar(500) DEFAULT NULL COMMENT '备注',
   PRIMARY KEY (`id`),
   KEY `idx_history_period_year` (`start_year`, `end_year`),
-  KEY `idx_history_period_status` (`status`)
+  KEY `idx_history_period_status` (`status`),
+  KEY `idx_history_period_country` (`country_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='历史时期';
 
 CREATE TABLE IF NOT EXISTS `history_place` (

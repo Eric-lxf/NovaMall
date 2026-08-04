@@ -9,6 +9,8 @@ public class HistoryTimelineItemVO
     private String title;
     private Long periodId;
     private String periodName;
+    private Long countryId;
+    private String countryName;
     private Long placeId;
     private String placeName;
     private Integer startYear;

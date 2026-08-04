@@ -8,7 +8,8 @@ import { RouterLink } from 'vue-router'
     <h1>以时间与证据理解中国历史</h1>
     <p class="lead">从秦汉到隋唐的主线事件、人物与地点，配套资料溯源与测验闭环。</p>
     <div class="actions">
-      <RouterLink class="btn primary" to="/history/timeline">进入时间线</RouterLink>
+      <RouterLink class="btn primary" to="/history/countries">国家朝代</RouterLink>
+      <RouterLink class="btn" to="/history/timeline">进入时间线</RouterLink>
       <RouterLink class="btn" to="/history/paths">学习路径</RouterLink>
       <RouterLink class="btn" to="/index">管理后台</RouterLink>
     </div>

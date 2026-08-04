@@ -6,6 +6,7 @@ USE nova_mall;
 
 INSERT IGNORE INTO sys_menu VALUES
 (4000, '历史学习', 0, 7, 'history-admin', NULL, '', '', 1, 0, 'M', '0', '0', '', 'education', 'admin', sysdate(), '', NULL, '历史学习管理目录'),
+(4010, '国家管理', 4000, 0, 'country', 'history/admin/country/index', '', '', 1, 0, 'C', '0', '0', 'history:country:list', 'international', 'admin', sysdate(), '', NULL, ''),
 (4001, '时期管理', 4000, 1, 'period', 'history/admin/period/index', '', '', 1, 0, 'C', '0', '0', 'history:period:list', 'time', 'admin', sysdate(), '', NULL, ''),
 (4002, '事件管理', 4000, 2, 'event', 'history/admin/event/index', '', '', 1, 0, 'C', '0', '0', 'history:event:list', 'list', 'admin', sysdate(), '', NULL, ''),
 (4003, '人物管理', 4000, 3, 'person', 'history/admin/person/index', '', '', 1, 0, 'C', '0', '0', 'history:person:list', 'peoples', 'admin', sysdate(), '', NULL, ''),
@@ -15,6 +16,11 @@ INSERT IGNORE INTO sys_menu VALUES
 (4007, '知识审核', 4000, 7, 'review', 'history/admin/review/index', '', '', 1, 0, 'C', '0', '0', 'history:claim:list', 'form', 'admin', sysdate(), '', NULL, ''),
 (4008, '学习单元', 4000, 8, 'unit', 'history/admin/unit/index', '', '', 1, 0, 'C', '0', '0', 'history:unit:list', 'education', 'admin', sysdate(), '', NULL, ''),
 (4009, '学习路径', 4000, 9, 'path', 'history/admin/path/index', '', '', 1, 0, 'C', '0', '0', 'history:path:list', 'guide', 'admin', sysdate(), '', NULL, ''),
+
+(4190, '国家查询', 4010, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:country:query', '#', 'admin', sysdate(), '', NULL, ''),
+(4191, '国家新增', 4010, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:country:add', '#', 'admin', sysdate(), '', NULL, ''),
+(4192, '国家修改', 4010, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:country:edit', '#', 'admin', sysdate(), '', NULL, ''),
+(4193, '国家删除', 4010, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:country:remove', '#', 'admin', sysdate(), '', NULL, ''),
 
 (4100, '时期查询', 4001, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:period:query', '#', 'admin', sysdate(), '', NULL, ''),
 (4101, '时期新增', 4001, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:period:add', '#', 'admin', sysdate(), '', NULL, ''),

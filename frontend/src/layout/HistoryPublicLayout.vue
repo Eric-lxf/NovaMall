@@ -11,6 +11,7 @@ import { RouterLink, RouterView } from 'vue-router'
       </RouterLink>
       <nav class="nav">
         <RouterLink to="/history">首页</RouterLink>
+        <RouterLink to="/history/countries">国家朝代</RouterLink>
         <RouterLink to="/history/timeline">时间线</RouterLink>
         <RouterLink to="/history/paths">学习路径</RouterLink>
         <RouterLink to="/index">管理后台</RouterLink>

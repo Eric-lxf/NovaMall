@@ -56,6 +56,14 @@ export function getPublicHistoryEvent(id) {
   return request({ url: `/history/events/${id}/public`, method: 'get' })
 }
 
+export function listPublicHistoryCountries() {
+  return request({ url: '/history/countries/public', method: 'get' })
+}
+
+export function getPublicHistoryCountry(id) {
+  return request({ url: `/history/countries/${id}/public`, method: 'get' })
+}
+
 export function listPublicHistoryPaths(params) {
   return request({ url: '/history/paths/public', method: 'get', params })
 }

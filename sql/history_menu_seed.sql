@@ -13,6 +13,8 @@ INSERT IGNORE INTO sys_menu VALUES
 (4005, '资料管理', 4000, 5, 'source', 'history/admin/source/index', '', '', 1, 0, 'C', '0', '0', 'history:source:list', 'documentation', 'admin', sysdate(), '', NULL, ''),
 (4006, 'AI任务', 4000, 6, 'task', 'history/admin/task/index', '', '', 1, 0, 'C', '0', '0', 'history:task:list', 'job', 'admin', sysdate(), '', NULL, ''),
 (4007, '知识审核', 4000, 7, 'review', 'history/admin/review/index', '', '', 1, 0, 'C', '0', '0', 'history:claim:list', 'form', 'admin', sysdate(), '', NULL, ''),
+(4008, '学习单元', 4000, 8, 'unit', 'history/admin/unit/index', '', '', 1, 0, 'C', '0', '0', 'history:unit:list', 'education', 'admin', sysdate(), '', NULL, ''),
+(4009, '学习路径', 4000, 9, 'path', 'history/admin/path/index', '', '', 1, 0, 'C', '0', '0', 'history:path:list', 'guide', 'admin', sysdate(), '', NULL, ''),
 
 (4100, '时期查询', 4001, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:period:query', '#', 'admin', sysdate(), '', NULL, ''),
 (4101, '时期新增', 4001, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:period:add', '#', 'admin', sysdate(), '', NULL, ''),
@@ -43,7 +45,19 @@ INSERT IGNORE INTO sys_menu VALUES
 (4151, '任务重试', 4006, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:task:retry', '#', 'admin', sysdate(), '', NULL, ''),
 
 (4160, '主张查询', 4007, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:claim:query', '#', 'admin', sysdate(), '', NULL, ''),
-(4161, '主张审核', 4007, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:claim:audit', '#', 'admin', sysdate(), '', NULL, '');
+(4161, '主张审核', 4007, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:claim:audit', '#', 'admin', sysdate(), '', NULL, ''),
+
+(4170, '单元查询', 4008, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:unit:query', '#', 'admin', sysdate(), '', NULL, ''),
+(4171, '单元新增', 4008, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:unit:add', '#', 'admin', sysdate(), '', NULL, ''),
+(4172, '单元修改', 4008, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:unit:edit', '#', 'admin', sysdate(), '', NULL, ''),
+(4173, '单元删除', 4008, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:unit:remove', '#', 'admin', sysdate(), '', NULL, ''),
+(4174, '单元发布', 4008, 5, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:unit:publish', '#', 'admin', sysdate(), '', NULL, ''),
+
+(4180, '路径查询', 4009, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:path:query', '#', 'admin', sysdate(), '', NULL, ''),
+(4181, '路径新增', 4009, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:path:add', '#', 'admin', sysdate(), '', NULL, ''),
+(4182, '路径修改', 4009, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:path:edit', '#', 'admin', sysdate(), '', NULL, ''),
+(4183, '路径删除', 4009, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:path:remove', '#', 'admin', sysdate(), '', NULL, ''),
+(4184, '路径发布', 4009, 5, '#', '', '', '', 1, 0, 'F', '0', '0', 'history:path:publish', '#', 'admin', sysdate(), '', NULL, '');
 
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
 SELECT 1, menu_id FROM sys_menu WHERE menu_id >= 4000 AND menu_id < 5000;

@@ -56,6 +56,22 @@ export function getPublicHistoryEvent(id) {
   return request({ url: `/history/events/${id}/public`, method: 'get' })
 }
 
+export function listPublicHistoryPaths(params) {
+  return request({ url: '/history/paths/public', method: 'get', params })
+}
+
+export function getPublicHistoryPath(id) {
+  return request({ url: `/history/paths/${id}/public`, method: 'get' })
+}
+
+export function getPublicHistoryUnit(id) {
+  return request({ url: `/history/units/${id}/public`, method: 'get' })
+}
+
+export function saveHistoryProgress(data) {
+  return request({ url: '/history/learning/progress', method: 'post', data })
+}
+
 /** 上传 PDF 等到通用上传接口，返回 fileName（/profile/...） */
 export function uploadHistoryFile(file) {
   const formData = new FormData()

@@ -161,6 +161,24 @@ export const constantRoutes = [
         name: 'HistoryPublicEvent',
         component: () => import('@/views/public/history/event-detail.vue'),
         meta: { title: '事件详情' }
+      },
+      {
+        path: 'paths',
+        name: 'HistoryPublicPaths',
+        component: () => import('@/views/public/history/paths.vue'),
+        meta: { title: '学习路径' }
+      },
+      {
+        path: 'paths/:id(\\d+)',
+        name: 'HistoryPublicPathDetail',
+        component: () => import('@/views/public/history/path-detail.vue'),
+        meta: { title: '路径详情' }
+      },
+      {
+        path: 'learn/:id(\\d+)',
+        name: 'HistoryPublicLearnUnit',
+        component: () => import('@/views/public/history/unit-detail.vue'),
+        meta: { title: '学习单元' }
       }
     ]
   },

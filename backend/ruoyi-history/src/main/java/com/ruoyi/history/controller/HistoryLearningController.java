@@ -26,10 +26,15 @@ import com.ruoyi.history.dto.HistoryClaimPageQuery;
 import com.ruoyi.history.dto.HistoryExtractRequest;
 import com.ruoyi.history.dto.HistorySourceImportRequest;
 import com.ruoyi.history.dto.HistorySourcePageQuery;
+import com.ruoyi.history.dto.HistoryProgressSaveRequest;
 import com.ruoyi.history.dto.HistoryTimelineQuery;
 import com.ruoyi.history.service.HistoryEventService;
 import com.ruoyi.history.service.HistoryExtractService;
+import com.ruoyi.history.service.HistoryPathService;
+import com.ruoyi.history.service.HistoryProgressService;
 import com.ruoyi.history.service.HistorySourceService;
+import com.ruoyi.history.service.HistoryUnitService;
+import com.ruoyi.common.utils.SecurityUtils;
 
 import lombok.RequiredArgsConstructor;
 
@@ -41,6 +46,9 @@ public class HistoryLearningController extends HistoryControllerSupport
     private final HistoryEventService historyEventService;
     private final HistorySourceService historySourceService;
     private final HistoryExtractService historyExtractService;
+    private final HistoryUnitService historyUnitService;
+    private final HistoryPathService historyPathService;
+    private final HistoryProgressService historyProgressService;
 
     /** C 端时间线：仅已发布事件 */
     @Anonymous
@@ -151,5 +159,45 @@ public class HistoryLearningController extends HistoryControllerSupport
     {
         historyExtractService.auditClaims(request);
         return AjaxResult.success();
+    }
+
+    @Anonymous
+    @GetMapping("/paths/public")
+    public AjaxResult publicPaths(@RequestParam(value = "limit", required = false) Integer limit)
+    {
+        return AjaxResult.success(historyPathService.listPublished(limit));
+    }
+
+    @Anonymous
+    @GetMapping("/paths/{id}/public")
+    public AjaxResult publicPath(@PathVariable Long id)
+    {
+        return AjaxResult.success(historyPathService.getPublishedDetail(id, tryCurrentUserId()));
+    }
+
+    @Anonymous
+    @GetMapping("/units/{id}/public")
+    public AjaxResult publicUnit(@PathVariable Long id)
+    {
+        return AjaxResult.success(historyUnitService.getPublishedDetail(id));
+    }
+
+    @Log(title = "历史学习进度", businessType = BusinessType.UPDATE)
+    @PostMapping("/learning/progress")
+    public AjaxResult saveProgress(@Valid @RequestBody HistoryProgressSaveRequest request)
+    {
+        return AjaxResult.success(historyProgressService.saveProgress(request));
+    }
+
+    private Long tryCurrentUserId()
+    {
+        try
+        {
+            return SecurityUtils.getUserId();
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
     }
 }

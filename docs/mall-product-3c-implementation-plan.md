@@ -566,10 +566,12 @@ V2.1.0__sku_spec_key.sql
 V2.2.0__sku_spec_normalized.sql
 V2.3.0__inventory_fields.sql
 V2.4.0__inventory_log.sql
-V2.5.0__product_3c_fields.sql
-V2.6.0__sku_images.sql
-V2.7.0__category_brand.sql
-V2.8.0__price_history.sql
+V2.4.2__payment_active_order_guard.sql
+V2.5.0__product_3c_attr_seed.sql
+V2.6.0__inventory_log_idempotency.sql
+V2.7.0__sku_images.sql
+V2.8.0__category_brand.sql
+V2.9.0__price_history.sql
 ```
 
 如果暂时不引入 Flyway，也要保证：

@@ -2,6 +2,7 @@ package com.ruoyi.mall.payment.gateway.impl;
 
 import java.util.Map;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import com.alibaba.fastjson2.JSON;
@@ -14,6 +15,7 @@ import com.ruoyi.mall.payment.gateway.PaymentCreateResult;
 import com.ruoyi.mall.payment.gateway.PaymentGateway;
 
 @Component
+@ConditionalOnProperty(prefix = "mall.payment", name = "mock-enabled", havingValue = "true", matchIfMissing = true)
 public class MockPayGateway implements PaymentGateway
 {
     @Override

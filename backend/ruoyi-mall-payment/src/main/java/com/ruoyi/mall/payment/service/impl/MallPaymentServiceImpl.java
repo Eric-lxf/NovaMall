@@ -9,6 +9,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -57,6 +58,16 @@ public class MallPaymentServiceImpl implements MallPaymentService
         PaymentGateway gateway = requireGateway(channel);
         MallOrderPaymentView order = mallOrderService.getPayableOrder(request.getOrderId(), userId);
 
+        MallPaymentOrder active = findActivePayment(order.getOrderId());
+        if (active != null)
+        {
+            if (channel.equals(active.getChannel()) && !isExpired(active))
+            {
+                return createGatewayPayment(gateway, order, active.getPayNo());
+            }
+            throw new ServiceException("订单已有支付处理中，请勿重复提交");
+        }
+
         MallPaymentOrder payment = new MallPaymentOrder();
         payment.setPayNo(generatePayNo());
         payment.setOrderId(order.getOrderId());
@@ -65,17 +76,18 @@ public class MallPaymentServiceImpl implements MallPaymentService
         payment.setChannel(channel);
         payment.setAmount(order.getPayAmount());
         payment.setStatus(MallPaymentConstants.STATUS_INIT);
+        payment.setActiveFlag(1);
         payment.setExpireTime(order.getExpireTime());
-        mallPaymentOrderMapper.insert(payment);
+        try
+        {
+            mallPaymentOrderMapper.insert(payment);
+        }
+        catch (DuplicateKeyException ex)
+        {
+            throw new ServiceException("订单已有支付处理中，请勿重复提交");
+        }
 
-        PaymentCreateCmd cmd = new PaymentCreateCmd();
-        cmd.setOrderId(order.getOrderId());
-        cmd.setOrderNo(order.getOrderNo());
-        cmd.setUserId(order.getUserId());
-        cmd.setPayNo(payment.getPayNo());
-        cmd.setAmount(order.getPayAmount());
-        cmd.setExpireTime(order.getExpireTime());
-        PaymentCreateResult result = gateway.create(cmd);
+        PaymentCreateResult result = createGatewayPayment(gateway, order, payment.getPayNo());
 
         MallPaymentOrder update = new MallPaymentOrder();
         update.setStatus(MallPaymentConstants.STATUS_PAYING);
@@ -89,6 +101,7 @@ public class MallPaymentServiceImpl implements MallPaymentService
     @Transactional
     public void confirmMock(String payNo)
     {
+        requireGateway(MallPaymentConstants.CHANNEL_MOCK);
         MallPaymentOrder payment = requireByPayNo(payNo);
         if (!MallPaymentConstants.CHANNEL_MOCK.equals(payment.getChannel()))
         {
@@ -154,12 +167,14 @@ public class MallPaymentServiceImpl implements MallPaymentService
         }
         MallPaymentOrder update = new MallPaymentOrder();
         update.setStatus(MallPaymentConstants.STATUS_SUCCESS);
+        update.setActiveFlag(null);
         update.setChannelTradeNo(StringUtils.hasText(channelTradeNo) ? channelTradeNo : payment.getPayNo());
         update.setNotifyRaw(notifyRaw);
         update.setPaidTime(LocalDateTime.now());
         int rows = mallPaymentOrderMapper.update(update, new LambdaUpdateWrapper<MallPaymentOrder>()
                 .eq(MallPaymentOrder::getId, payment.getId())
-                .ne(MallPaymentOrder::getStatus, MallPaymentConstants.STATUS_SUCCESS));
+                .ne(MallPaymentOrder::getStatus, MallPaymentConstants.STATUS_SUCCESS)
+                .set(MallPaymentOrder::getActiveFlag, null));
         if (rows == 0)
         {
             MallPaymentOrder latest = mallPaymentOrderMapper.selectById(payment.getId());
@@ -171,6 +186,32 @@ public class MallPaymentServiceImpl implements MallPaymentService
             throw new ServiceException("支付状态更新失败");
         }
         mallOrderService.markOrderPaid(payment.getOrderId(), payment.getPayNo());
+    }
+
+    private MallPaymentOrder findActivePayment(Long orderId)
+    {
+        return mallPaymentOrderMapper.selectOne(new LambdaQueryWrapper<MallPaymentOrder>()
+                .eq(MallPaymentOrder::getOrderId, orderId)
+                .eq(MallPaymentOrder::getActiveFlag, 1)
+                .orderByDesc(MallPaymentOrder::getId)
+                .last("LIMIT 1"));
+    }
+
+    private boolean isExpired(MallPaymentOrder payment)
+    {
+        return payment.getExpireTime() != null && payment.getExpireTime().isBefore(LocalDateTime.now());
+    }
+
+    private PaymentCreateResult createGatewayPayment(PaymentGateway gateway, MallOrderPaymentView order, String payNo)
+    {
+        PaymentCreateCmd cmd = new PaymentCreateCmd();
+        cmd.setOrderId(order.getOrderId());
+        cmd.setOrderNo(order.getOrderNo());
+        cmd.setUserId(order.getUserId());
+        cmd.setPayNo(payNo);
+        cmd.setAmount(order.getPayAmount());
+        cmd.setExpireTime(order.getExpireTime());
+        return gateway.create(cmd);
     }
 
     private MallPaymentOrder requireByPayNo(String payNo)

@@ -47,10 +47,17 @@ public class MallInventoryServiceImpl implements MallInventoryService
         {
             throw new ServiceException("调整数量不能为0", HttpStatus.BAD_REQUEST);
         }
+        long signedQuantity = request.getQuantity().longValue();
+        long absoluteQuantity = Math.abs(signedQuantity);
+        if (absoluteQuantity > MallProductConstants.MAX_INVENTORY_CHANGE_QUANTITY)
+        {
+            throw new ServiceException("单次库存调整不能超过" + MallProductConstants.MAX_INVENTORY_CHANGE_QUANTITY,
+                    HttpStatus.BAD_REQUEST);
+        }
         String reason = request.getReason().trim().toUpperCase(Locale.ROOT);
         MallSku before = requireSku(request.getSkuId());
-        int absQty = Math.abs(request.getQuantity());
-        boolean inbound = request.getQuantity() > 0;
+        int absQty = (int) absoluteQuantity;
+        boolean inbound = signedQuantity > 0;
 
         if (inbound)
         {

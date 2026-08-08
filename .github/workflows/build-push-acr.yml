@@ -1,9 +1,8 @@
 name: Build and Push to ACR
 
 on:
-  push:
-    branches:
-      - master
+  # master 推送由 deploy-ecs.yml 统一构建并部署；本工作流仅保留手工构建入口，
+  # 避免同一提交重复构建并竞争 latest 标签。
   workflow_dispatch:
 
 concurrency:

@@ -22,6 +22,8 @@ public class MallPaymentOrder
     private String channel;
     private BigDecimal amount;
     private String status;
+    /** 非终态支付单为 1，终态为 null；配合 (order_id, active_flag) 唯一约束防止重复有效支付单。 */
+    private Integer activeFlag;
     private String channelTradeNo;
     private String notifyRaw;
     private LocalDateTime paidTime;

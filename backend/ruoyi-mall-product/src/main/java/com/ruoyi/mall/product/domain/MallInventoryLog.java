@@ -25,6 +25,7 @@ public class MallInventoryLog
     private Integer afterAvailable;
     private String bizType;
     private String bizId;
+    private String idempotencyKey;
     private String operator;
     private String remark;
     private LocalDateTime createTime;

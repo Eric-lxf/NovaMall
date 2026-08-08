@@ -12,7 +12,8 @@ import usePermissionStore from '@/store/modules/permission'
 
 NProgress.configure({ showSpinner: false })
 
-// C 端公开前台可匿名访问；后台商城在 /mall-admin/**、历史管理在 /history-admin/**，切勿放进白名单
+// 仅公开浏览页允许匿名访问；购物车、结算、支付、订单和地址必须先登录。
+// 后台商城在 /mall-admin/**、历史管理在 /history-admin/**，切勿放进白名单。
 const whiteList = [
   '/login',
   '/register',
@@ -21,13 +22,6 @@ const whiteList = [
   '/mall',
   '/mall/list',
   '/mall/detail/**',
-  '/mall/cart',
-  '/mall/checkout',
-  '/mall/pay',
-  '/mall/pay/**',
-  '/mall/orders',
-  '/mall/orders/**',
-  '/mall/address',
   '/history',
   '/history/**'
 ]
@@ -38,8 +32,8 @@ const isWhiteList = (path) => {
 
 router.beforeEach(async (to, from) => {
   NProgress.start()
+  to.meta.title && useSettingsStore().setTitle(to.meta.title)
   if (getToken()) {
-    to.meta.title && useSettingsStore().setTitle(to.meta.title)
     const isLock = useLockStore().isLock
     if (to.path === '/login') {
       removeToken()

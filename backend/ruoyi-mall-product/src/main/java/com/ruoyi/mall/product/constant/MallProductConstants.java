@@ -19,6 +19,9 @@ public final class MallProductConstants
     public static final String INPUT_TYPE_SELECT = "select";
     public static final String INPUT_TYPE_MULTI = "multi";
 
+    /** 单次库存变更上限，避免异常请求触发整数溢出或一次性巨量调整。 */
+    public static final int MAX_INVENTORY_CHANGE_QUANTITY = 1_000_000;
+
     private MallProductConstants()
     {
     }

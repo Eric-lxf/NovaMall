@@ -12,7 +12,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: nova_mall
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./sql/00-init-db.sql:/docker-entrypoint-initdb.d/00-init-db.sql:ro
@@ -36,6 +36,29 @@ services:
       - ./sql/mall_menu_path_fix.sql:/docker-entrypoint-initdb.d/18-mall_menu_path_fix.sql:ro
       - ./sql/mall_order_job_seed.sql:/docker-entrypoint-initdb.d/19-mall_order_job_seed.sql:ro
       - ./sql/mall_demo_seed.sql:/docker-entrypoint-initdb.d/20-mall_demo_seed.sql:ro
+      # 当前商品模型：Phase B 基表/数据迁移先于 V2 结构升级。
+      - ./sql/mall_attr_front_category_schema.sql:/docker-entrypoint-initdb.d/21-mall_attr_front_category_schema.sql:ro
+      - ./sql/mall_phase_b_migrate_front_category.sql:/docker-entrypoint-initdb.d/22-mall_phase_b_migrate_front_category.sql:ro
+      - ./sql/mall_phase_b_menu_seed.sql:/docker-entrypoint-initdb.d/23-mall_phase_b_menu_seed.sql:ro
+      - ./sql/mall_phase_b_attr_demo_seed.sql:/docker-entrypoint-initdb.d/24-mall_phase_b_attr_demo_seed.sql:ro
+      - ./sql/V2.1.0__sku_spec_key.sql:/docker-entrypoint-initdb.d/25-V2.1.0__sku_spec_key.sql:ro
+      - ./sql/V2.2.0__sku_spec_normalized.sql:/docker-entrypoint-initdb.d/26-V2.2.0__sku_spec_normalized.sql:ro
+      - ./sql/V2.3.0__inventory_fields.sql:/docker-entrypoint-initdb.d/27-V2.3.0__inventory_fields.sql:ro
+      - ./sql/V2.4.0__inventory_log.sql:/docker-entrypoint-initdb.d/28-V2.4.0__inventory_log.sql:ro
+      - ./sql/V2.4.2__payment_active_order_guard.sql:/docker-entrypoint-initdb.d/29-V2.4.2__payment_active_order_guard.sql:ro
+      - ./sql/V2.5.0__product_3c_attr_seed.sql:/docker-entrypoint-initdb.d/30-V2.5.0__product_3c_attr_seed.sql:ro
+      - ./sql/V2.6.0__inventory_log_idempotency.sql:/docker-entrypoint-initdb.d/31-V2.6.0__inventory_log_idempotency.sql:ro
+      # History 基线脚本已合并国家、学习单元/路径等各阶段结构和菜单。
+      - ./sql/history_schema.sql:/docker-entrypoint-initdb.d/32-history_schema.sql:ro
+      - ./sql/history_ai_extract_schema.sql:/docker-entrypoint-initdb.d/33-history_ai_extract_schema.sql:ro
+      - ./sql/history_menu_seed.sql:/docker-entrypoint-initdb.d/34-history_menu_seed.sql:ro
+      - ./sql/history_demo_seed.sql:/docker-entrypoint-initdb.d/35-history_demo_seed.sql:ro
+      - ./sql/history_demo_country.sql:/docker-entrypoint-initdb.d/36-history_demo_country.sql:ro
+      - ./sql/history_demo_phase4.sql:/docker-entrypoint-initdb.d/37-history_demo_phase4.sql:ro
+      # HN 同步是当前博客模块的一部分，保持新库与 README 初始化清单一致。
+      - ./sql/blog_hn_schema.sql:/docker-entrypoint-initdb.d/38-blog_hn_schema.sql:ro
+      - ./sql/blog_hn_menu_seed.sql:/docker-entrypoint-initdb.d/39-blog_hn_menu_seed.sql:ro
+      - ./sql/blog_hn_job_seed.sql:/docker-entrypoint-initdb.d/40-blog_hn_job_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
       interval: 10s
@@ -48,7 +71,7 @@ services:
     container_name: nova-mall-web-redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -71,6 +94,10 @@ services:
     environment:
       TZ: Asia/Shanghai
       SPRING_PROFILES_ACTIVE: druid,docker
+      TOKEN_SECRET: ${TOKEN_SECRET:?TOKEN_SECRET is required; copy .env.example to .env first}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      DRUID_STAT_ENABLED: ${DRUID_STAT_ENABLED:-false}
+      MALL_PAYMENT_MOCK_ENABLED: ${MALL_PAYMENT_MOCK_ENABLED:-true}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: nova_mall
@@ -83,9 +110,9 @@ services:
     volumes:
       - uploads_data:/data/uploads
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/actuator/health || wget -q --spider http://127.0.0.1:8080/captchaImage"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/actuator/health"]
       interval: 15s
       timeout: 10s
       retries: 12

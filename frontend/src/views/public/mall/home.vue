@@ -35,6 +35,11 @@ function productImage(item) {
 }
 
 function priceText(item) {
+  if (item.minPrice != null) {
+    const min = Number(item.minPrice).toFixed(2)
+    const max = Number(item.maxPrice ?? item.minPrice).toFixed(2)
+    return min === max ? `¥${min}` : `¥${min} 起`
+  }
   const skus = item.skus || item.skuList || []
   if (!skus.length) return '价格待定'
   const prices = skus.map(sku => Number(sku.price || 0))

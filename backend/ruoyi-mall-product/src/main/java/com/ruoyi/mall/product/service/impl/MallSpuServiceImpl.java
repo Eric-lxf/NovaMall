@@ -54,8 +54,11 @@ import com.ruoyi.mall.product.service.MallAttrService;
 import com.ruoyi.mall.product.service.MallFrontCategoryService;
 import com.ruoyi.mall.product.service.MallSpuService;
 import com.ruoyi.mall.product.util.MallSkuSpecKeyBuilder;
+import com.ruoyi.mall.product.util.MallProductRichTextSanitizer;
 import com.ruoyi.mall.product.vo.MallAttrTemplateVO;
 import com.ruoyi.mall.product.vo.MallAttrVO;
+import com.ruoyi.mall.product.vo.MallPublicSpuDetailVO;
+import com.ruoyi.mall.product.vo.MallPublicSpuVO;
 import com.ruoyi.mall.product.vo.MallSpuAttrValueVO;
 import com.ruoyi.mall.product.vo.MallSpuDetailVO;
 import com.ruoyi.mall.product.vo.MallSpuVO;
@@ -83,9 +86,17 @@ public class MallSpuServiceImpl implements MallSpuService
     }
 
     @Override
-    public Page<MallSpuVO> publicPage(MallSpuPageQuery query)
+    public Page<MallPublicSpuVO> publicPage(MallSpuPageQuery query)
     {
-        return querySpus(query, true);
+        Page<MallSpuVO> internalPage = querySpus(query, true);
+        Map<Long, PriceRange> priceRanges = loadPriceRanges(
+                internalPage.getRecords().stream().map(MallSpuVO::getId).toList());
+        Page<MallPublicSpuVO> publicPage = new Page<>(
+                internalPage.getCurrent(), internalPage.getSize(), internalPage.getTotal());
+        publicPage.setRecords(internalPage.getRecords().stream()
+                .map(spu -> toPublicVO(spu, priceRanges.get(spu.getId())))
+                .toList());
+        return publicPage;
     }
 
     @Override
@@ -96,7 +107,7 @@ public class MallSpuServiceImpl implements MallSpuService
     }
 
     @Override
-    public MallSpuDetailVO publicDetail(Long id)
+    public MallPublicSpuDetailVO publicDetail(Long id)
     {
         MallSpu spu = mallSpuMapper.selectOne(new LambdaQueryWrapper<MallSpu>()
                 .eq(MallSpu::getId, id)
@@ -106,7 +117,7 @@ public class MallSpuServiceImpl implements MallSpuService
         {
             throw new ServiceException("商品不存在", HttpStatus.NOT_FOUND);
         }
-        return toDetailVO(spu, true);
+        return toPublicDetailVO(toDetailVO(spu, true));
     }
 
     @Override
@@ -161,16 +172,28 @@ public class MallSpuServiceImpl implements MallSpuService
     {
         requireSpu(id);
         String username = SecurityUtils.getUsername();
+        List<MallSku> activeSkus = mallSkuMapper.selectList(new LambdaQueryWrapper<MallSku>()
+                .eq(MallSku::getSpuId, id)
+                .eq(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_NORMAL));
+        ensureNoLockedStock(activeSkus);
         mallSpuMapper.update(null, new LambdaUpdateWrapper<MallSpu>()
                 .eq(MallSpu::getId, id)
                 .eq(MallSpu::getDelFlag, MallProductConstants.DEL_FLAG_NORMAL)
                 .set(MallSpu::getDelFlag, MallProductConstants.DEL_FLAG_DELETED)
                 .set(MallSpu::getUpdateBy, username));
-        mallSkuMapper.update(null, new LambdaUpdateWrapper<MallSku>()
-                .eq(MallSku::getSpuId, id)
-                .eq(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_NORMAL)
-                .set(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_DELETED)
-                .set(MallSku::getUpdateBy, username));
+        if (!activeSkus.isEmpty())
+        {
+            int updated = mallSkuMapper.update(null, new LambdaUpdateWrapper<MallSku>()
+                    .in(MallSku::getId, activeSkus.stream().map(MallSku::getId).toList())
+                    .eq(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_NORMAL)
+                    .eq(MallSku::getStockLocked, 0)
+                    .set(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_DELETED)
+                    .set(MallSku::getUpdateBy, username));
+            if (updated != activeSkus.size())
+            {
+                throw new ServiceException("商品存在锁定库存，暂不能删除", HttpStatus.BAD_REQUEST);
+            }
+        }
         mallSpuAttrValueMapper.delete(new LambdaQueryWrapper<MallSpuAttrValue>().eq(MallSpuAttrValue::getSpuId, id));
     }
 
@@ -308,7 +331,7 @@ public class MallSpuServiceImpl implements MallSpuService
         spu.setName(request.getName());
         spu.setSubtitle(request.getSubtitle());
         spu.setMainImage(request.getMainImage());
-        spu.setDetailHtml(request.getDetailHtml());
+        spu.setDetailHtml(MallProductRichTextSanitizer.sanitize(request.getDetailHtml()));
         spu.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : MallProductConstants.SPU_STATUS_DRAFT);
         spu.setSort(request.getSort() == null ? 0 : request.getSort());
         spu.setRemark(request.getRemark());
@@ -331,13 +354,21 @@ public class MallSpuServiceImpl implements MallSpuService
                 .toList();
         if (!removedIds.isEmpty())
         {
+            List<MallSku> removedSkus = removedIds.stream().map(existingById::get).filter(Objects::nonNull).toList();
+            ensureNoLockedStock(removedSkus);
             for (Long removedId : removedIds)
             {
-                mallSkuMapper.update(null, new LambdaUpdateWrapper<MallSku>()
+                int updated = mallSkuMapper.update(null, new LambdaUpdateWrapper<MallSku>()
                         .eq(MallSku::getId, removedId)
+                        .eq(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_NORMAL)
+                        .eq(MallSku::getStockLocked, 0)
                         .set(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_DELETED)
                         .set(MallSku::getSpecKey, "deleted:" + removedId)
                         .set(MallSku::getUpdateBy, username));
+                if (updated == 0)
+                {
+                    throw new ServiceException("SKU存在锁定库存，暂不能移除", HttpStatus.BAD_REQUEST);
+                }
             }
             mallSkuSpecMapper.delete(new LambdaQueryWrapper<MallSkuSpec>().in(MallSkuSpec::getSkuId, removedIds));
         }
@@ -484,6 +515,22 @@ public class MallSpuServiceImpl implements MallSpuService
         if (request.getId() == null && request.getStock() != null && request.getStock() < 0)
         {
             throw new ServiceException("SKU库存不能小于0", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void ensureNoLockedStock(List<MallSku> skus)
+    {
+        if (CollectionUtils.isEmpty(skus))
+        {
+            return;
+        }
+        for (MallSku sku : skus)
+        {
+            if (sku.getStockLocked() != null && sku.getStockLocked() > 0)
+            {
+                String skuLabel = StringUtils.hasText(sku.getSkuCode()) ? sku.getSkuCode() : String.valueOf(sku.getId());
+                throw new ServiceException("SKU「" + skuLabel + "」存在锁定库存，暂不能删除", HttpStatus.BAD_REQUEST);
+            }
         }
     }
 
@@ -952,6 +999,94 @@ public class MallSpuServiceImpl implements MallSpuService
         return result;
     }
 
+    private MallPublicSpuDetailVO toPublicDetailVO(MallSpuDetailVO internal)
+    {
+        MallPublicSpuDetailVO result = new MallPublicSpuDetailVO();
+        BeanUtils.copyProperties(toPublicVO(internal, priceRange(internal.getSkus())), result);
+        result.setDetailHtml(MallProductRichTextSanitizer.sanitize(internal.getDetailHtml()));
+        result.setSkus(internal.getSkus().stream().map(sku -> {
+            MallPublicSpuDetailVO.SkuVO item = new MallPublicSpuDetailVO.SkuVO();
+            item.setId(sku.getId());
+            item.setSpecsJson(sku.getSpecsJson());
+            item.setPrice(sku.getPrice());
+            item.setStock(sku.getStock());
+            item.setStatus(sku.getStatus());
+            item.setSpecs(sku.getSpecs().stream().map(spec -> {
+                MallPublicSpuDetailVO.SpecVO specVO = new MallPublicSpuDetailVO.SpecVO();
+                specVO.setAttrId(spec.getAttrId());
+                specVO.setOptionId(spec.getOptionId());
+                specVO.setValue(spec.getValue());
+                return specVO;
+            }).toList());
+            return item;
+        }).toList());
+        result.setImages(internal.getImages().stream().map(image -> {
+            MallPublicSpuDetailVO.ImageVO item = new MallPublicSpuDetailVO.ImageVO();
+            item.setUrl(image.getUrl());
+            item.setSort(image.getSort());
+            return item;
+        }).toList());
+        result.setAttrValues(internal.getAttrValues());
+        return result;
+    }
+
+    private MallPublicSpuVO toPublicVO(MallSpuVO internal, PriceRange priceRange)
+    {
+        MallPublicSpuVO result = new MallPublicSpuVO();
+        BeanUtils.copyProperties(internal, result);
+        if (priceRange != null)
+        {
+            result.setMinPrice(priceRange.min());
+            result.setMaxPrice(priceRange.max());
+        }
+        return result;
+    }
+
+    private Map<Long, PriceRange> loadPriceRanges(List<Long> spuIds)
+    {
+        if (CollectionUtils.isEmpty(spuIds))
+        {
+            return Map.of();
+        }
+        List<MallSku> skus = mallSkuMapper.selectList(new LambdaQueryWrapper<MallSku>()
+                .in(MallSku::getSpuId, spuIds)
+                .eq(MallSku::getStatus, MallProductConstants.STATUS_NORMAL)
+                .eq(MallSku::getDelFlag, MallProductConstants.DEL_FLAG_NORMAL));
+        Map<Long, PriceRange> result = new HashMap<>();
+        for (MallSku sku : skus)
+        {
+            if (sku.getPrice() == null)
+            {
+                continue;
+            }
+            PriceRange current = new PriceRange(sku.getPrice(), sku.getPrice());
+            result.merge(sku.getSpuId(), current,
+                    (left, right) -> new PriceRange(left.min().min(right.min()), left.max().max(right.max())));
+        }
+        return result;
+    }
+
+    private PriceRange priceRange(List<MallSku> skus)
+    {
+        PriceRange result = null;
+        for (MallSku sku : skus)
+        {
+            if (sku.getPrice() == null)
+            {
+                continue;
+            }
+            if (result == null)
+            {
+                result = new PriceRange(sku.getPrice(), sku.getPrice());
+            }
+            else
+            {
+                result = new PriceRange(result.min().min(sku.getPrice()), result.max().max(sku.getPrice()));
+            }
+        }
+        return result;
+    }
+
     private MallSpuVO toVO(MallSpu spu, Map<Long, String> categoryMap, Map<Long, String> brandMap)
     {
         MallSpuVO vo = new MallSpuVO();
@@ -981,5 +1116,9 @@ public class MallSpuServiceImpl implements MallSpuService
         }
         return mallBrandMapper.selectList(new LambdaQueryWrapper<MallBrand>().in(MallBrand::getId, ids)).stream()
                 .collect(Collectors.toMap(MallBrand::getId, MallBrand::getName));
+    }
+
+    private record PriceRange(BigDecimal min, BigDecimal max)
+    {
     }
 }

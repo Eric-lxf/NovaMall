@@ -131,6 +131,12 @@ jobs:
       - name: Checkout deployment files
         uses: actions/checkout@v4
 
+      - name: Database migration notice
+        run: |
+          echo "::notice::本工作流不会自动执行数据库 SQL。发布含结构变更的版本前，请先按 docs/database-upgrade.md 备份并手工升级存量库。"
+          echo "## 数据库升级提醒" >> "$GITHUB_STEP_SUMMARY"
+          echo "生产部署不会自动执行 SQL；结构变更请先按 [docs/database-upgrade.md](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/database-upgrade.md) 手工升级。" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Ensure ECS deployment directory exists
         uses: appleboy/ssh-action@v1.2.1
         with:
@@ -142,15 +148,15 @@ jobs:
           script: |
             mkdir -p /opt/nova-mall
 
-      # 仅上传 Compose 文件；不上传源码、SQL、.env。
-      - name: Upload Docker Compose file
+      # 上传运行编排与只读迁移资料；SQL 仍由维护窗口手工执行，不自动重放。
+      - name: Upload deployment and migration files
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.ECS_HOST }}
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_PRIVATE_KEY }}
           fingerprint: ${{ secrets.ECS_SSH_FINGERPRINT }}
-          source: "docker-compose.prod.yml"
+          source: "docker-compose.prod.yml,docs/database-upgrade.md,sql"
           target: ${{ env.ECS_DEPLOY_PATH }}
 
       - name: Pull ACR images and deploy containers
@@ -164,6 +170,7 @@ jobs:
 
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
           ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
 
           MYSQL_USER: ${{ secrets.MYSQL_USER }}
           MYSQL_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
@@ -181,6 +188,8 @@ jobs:
 
           NOVAMALL_OSS_ENABLED: ${{ vars.NOVAMALL_OSS_ENABLED }}
           NOVAMALL_OSS_BUCKET: ${{ vars.NOVAMALL_OSS_BUCKET }}
+          NOVAMALL_OSS_ENDPOINT: ${{ vars.NOVAMALL_OSS_ENDPOINT }}
+          NOVAMALL_OSS_DOMAIN: ${{ vars.NOVAMALL_OSS_DOMAIN }}
 
           BACKEND_PORT: ${{ vars.BACKEND_PORT }}
           FRONTEND_PORT: ${{ vars.FRONTEND_PORT }}
@@ -191,24 +200,52 @@ jobs:
           key: ${{ secrets.ECS_SSH_PRIVATE_KEY }}
           fingerprint: ${{ secrets.ECS_SSH_FINGERPRINT }}
           script_stop: true
-          envs: ACR_REGISTRY,ACR_NAMESPACE,BACKEND_IMAGE_NAME,FRONTEND_IMAGE_NAME,IMAGE_TAG,ACR_USERNAME,ACR_PASSWORD,MYSQL_USER,MYSQL_PASSWORD,REDIS_PASSWORD,NOVAMALL_OSS_KEY_ID,NOVAMALL_OSS_KEY_SECRET,MYSQL_HOST,MYSQL_PORT,MYSQL_DATABASE,REDIS_HOST,REDIS_PORT,NOVAMALL_OSS_ENABLED,NOVAMALL_OSS_BUCKET,BACKEND_PORT,FRONTEND_PORT,RUOYI_LOG_PATH
+          envs: ACR_REGISTRY,ACR_NAMESPACE,BACKEND_IMAGE_NAME,FRONTEND_IMAGE_NAME,IMAGE_TAG,ACR_USERNAME,ACR_PASSWORD,TOKEN_SECRET,MYSQL_USER,MYSQL_PASSWORD,REDIS_PASSWORD,NOVAMALL_OSS_KEY_ID,NOVAMALL_OSS_KEY_SECRET,MYSQL_HOST,MYSQL_PORT,MYSQL_DATABASE,REDIS_HOST,REDIS_PORT,NOVAMALL_OSS_ENABLED,NOVAMALL_OSS_BUCKET,NOVAMALL_OSS_ENDPOINT,NOVAMALL_OSS_DOMAIN,BACKEND_PORT,FRONTEND_PORT,RUOYI_LOG_PATH
           script: |
             set -euo pipefail
 
             cd /opt/nova-mall
 
             test -f docker-compose.prod.yml
+            test -n "$TOKEN_SECRET"
+            if [ "${#TOKEN_SECRET}" -lt 64 ]; then
+              echo "TOKEN_SECRET must contain at least 64 characters" >&2
+              exit 1
+            fi
             test -n "$MYSQL_USER"
             test -n "$MYSQL_PASSWORD"
             test -n "$REDIS_PASSWORD"
             test -n "$MYSQL_HOST"
             test -n "$REDIS_HOST"
-            test -n "$NOVAMALL_OSS_KEY_ID"
-            test -n "$NOVAMALL_OSS_KEY_SECRET"
+            test -n "$RUOYI_LOG_PATH"
+            case "$RUOYI_LOG_PATH" in
+              /opt/nova-mall/*|/var/log/nova-mall|/var/log/nova-mall/*|/home/ruoyi/logs) ;;
+              *)
+                echo "RUOYI_LOG_PATH must be a dedicated NovaMall log directory" >&2
+                exit 1
+                ;;
+            esac
+            mkdir -p -- "$RUOYI_LOG_PATH"
+            chown 10001:10001 -- "$RUOYI_LOG_PATH"
+            chmod 0750 -- "$RUOYI_LOG_PATH"
+
+            NOVAMALL_OSS_ENABLED="${NOVAMALL_OSS_ENABLED:-false}"
+            NOVAMALL_OSS_KEY_ID="${NOVAMALL_OSS_KEY_ID:-}"
+            NOVAMALL_OSS_KEY_SECRET="${NOVAMALL_OSS_KEY_SECRET:-}"
+            NOVAMALL_OSS_BUCKET="${NOVAMALL_OSS_BUCKET:-}"
+            NOVAMALL_OSS_ENDPOINT="${NOVAMALL_OSS_ENDPOINT:-oss-cn-beijing.aliyuncs.com}"
+            NOVAMALL_OSS_DOMAIN="${NOVAMALL_OSS_DOMAIN:-}"
+            if [ "$NOVAMALL_OSS_ENABLED" = "true" ] || [ "$NOVAMALL_OSS_ENABLED" = "1" ]; then
+              test -n "$NOVAMALL_OSS_KEY_ID"
+              test -n "$NOVAMALL_OSS_KEY_SECRET"
+              test -n "$NOVAMALL_OSS_BUCKET"
+            fi
 
             # 每次部署都从 GitHub Secrets / Variables 重建运行配置。
             umask 077
             {
+              printf 'TOKEN_SECRET=%s\n' "$TOKEN_SECRET"
+
               printf 'MYSQL_HOST=%s\n' "$MYSQL_HOST"
               printf 'MYSQL_PORT=%s\n' "$MYSQL_PORT"
               printf 'MYSQL_DATABASE=%s\n' "$MYSQL_DATABASE"
@@ -223,6 +260,8 @@ jobs:
               printf 'NOVAMALL_OSS_KEY_ID=%s\n' "$NOVAMALL_OSS_KEY_ID"
               printf 'NOVAMALL_OSS_KEY_SECRET=%s\n' "$NOVAMALL_OSS_KEY_SECRET"
               printf 'NOVAMALL_OSS_BUCKET=%s\n' "$NOVAMALL_OSS_BUCKET"
+              printf 'NOVAMALL_OSS_ENDPOINT=%s\n' "$NOVAMALL_OSS_ENDPOINT"
+              printf 'NOVAMALL_OSS_DOMAIN=%s\n' "$NOVAMALL_OSS_DOMAIN"
 
               printf 'BACKEND_PORT=%s\n' "$BACKEND_PORT"
               printf 'FRONTEND_PORT=%s\n' "$FRONTEND_PORT"

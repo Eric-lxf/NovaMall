@@ -1,5 +1,6 @@
 package com.ruoyi.mall.product.service.impl;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -33,18 +34,25 @@ public class MallSkuStockServiceImpl implements MallSkuStockService
     public boolean lockStock(Long skuId, int qty, String bizId, String operator)
     {
         validateQty(qty);
+        bizId = normalizeBizId(bizId);
         if (alreadyLogged(skuId, MallInventoryChangeType.ORDER_LOCK, bizId))
         {
             return true;
         }
         MallSku before = requireSku(skuId);
+        MallInventoryLog log = reserveLog(before, MallInventoryChangeType.ORDER_LOCK, qty,
+                MallInventoryChangeType.BIZ_TYPE_ORDER, bizId, operator, "下单锁定库存");
+        if (log == null)
+        {
+            return true;
+        }
         if (mallSkuMapper.lockStock(skuId, qty) == 0)
         {
+            mallInventoryLogMapper.deleteById(log.getId());
             return false;
         }
         MallSku after = requireSku(skuId);
-        writeLog(before, after, MallInventoryChangeType.ORDER_LOCK, qty,
-                MallInventoryChangeType.BIZ_TYPE_ORDER, bizId, operator, "下单锁定库存");
+        completeLog(log, after);
         return true;
     }
 
@@ -53,19 +61,25 @@ public class MallSkuStockServiceImpl implements MallSkuStockService
     public void unlockStock(Long skuId, int qty, String bizId, String operator)
     {
         validateQty(qty);
+        bizId = normalizeBizId(bizId);
         if (alreadyLogged(skuId, MallInventoryChangeType.ORDER_UNLOCK, bizId)
                 || alreadyLogged(skuId, MallInventoryChangeType.ORDER_CANCEL, bizId))
         {
             return;
         }
         MallSku before = requireSku(skuId);
+        MallInventoryLog log = reserveLog(before, MallInventoryChangeType.ORDER_UNLOCK, qty,
+                MallInventoryChangeType.BIZ_TYPE_ORDER, bizId, operator, "订单取消解锁库存");
+        if (log == null)
+        {
+            return;
+        }
         if (mallSkuMapper.unlockStock(skuId, qty) == 0)
         {
             throw new ServiceException("SKU锁定库存不足，解锁失败", HttpStatus.BAD_REQUEST);
         }
         MallSku after = requireSku(skuId);
-        writeLog(before, after, MallInventoryChangeType.ORDER_UNLOCK, qty,
-                MallInventoryChangeType.BIZ_TYPE_ORDER, bizId, operator, "订单取消解锁库存");
+        completeLog(log, after);
     }
 
     @Override
@@ -73,18 +87,24 @@ public class MallSkuStockServiceImpl implements MallSkuStockService
     public void deductLockedStock(Long skuId, int qty, String bizId, String operator)
     {
         validateQty(qty);
+        bizId = normalizeBizId(bizId);
         if (alreadyLogged(skuId, MallInventoryChangeType.ORDER_DEDUCT, bizId))
         {
             return;
         }
         MallSku before = requireSku(skuId);
+        MallInventoryLog log = reserveLog(before, MallInventoryChangeType.ORDER_DEDUCT, qty,
+                MallInventoryChangeType.BIZ_TYPE_ORDER, bizId, operator, "支付成功扣减库存");
+        if (log == null)
+        {
+            return;
+        }
         if (mallSkuMapper.deductLockedStock(skuId, qty) == 0)
         {
             throw new ServiceException("SKU锁定库存不足，支付扣减失败", HttpStatus.BAD_REQUEST);
         }
         MallSku after = requireSku(skuId);
-        writeLog(before, after, MallInventoryChangeType.ORDER_DEDUCT, qty,
-                MallInventoryChangeType.BIZ_TYPE_ORDER, bizId, operator, "支付成功扣减库存");
+        completeLog(log, after);
     }
 
     @Override
@@ -143,7 +163,11 @@ public class MallSkuStockServiceImpl implements MallSkuStockService
         return sku;
     }
 
-    private void writeLog(MallSku before, MallSku after, String changeType, int qty,
+    /**
+     * 先占用幂等键，再变更库存。并发请求会在唯一索引处等待首个事务完成，
+     * 从而不会先重复扣减库存再依赖事务回滚兜底。
+     */
+    private MallInventoryLog reserveLog(MallSku before, String changeType, int qty,
             String bizType, String bizId, String operator, String remark)
     {
         MallInventoryLog log = new MallInventoryLog();
@@ -151,16 +175,36 @@ public class MallSkuStockServiceImpl implements MallSkuStockService
         log.setChangeType(changeType);
         log.setQuantity(qty);
         log.setBeforeTotal(nz(before.getStockTotal()));
-        log.setAfterTotal(nz(after.getStockTotal()));
+        log.setAfterTotal(nz(before.getStockTotal()));
         log.setBeforeLocked(nz(before.getStockLocked()));
-        log.setAfterLocked(nz(after.getStockLocked()));
+        log.setAfterLocked(nz(before.getStockLocked()));
         log.setBeforeAvailable(nz(before.getStockAvailable()));
-        log.setAfterAvailable(nz(after.getStockAvailable()));
+        log.setAfterAvailable(nz(before.getStockAvailable()));
         log.setBizType(bizType);
         log.setBizId(bizId);
+        log.setIdempotencyKey(buildIdempotencyKey(before.getId(), changeType, bizType, bizId));
         log.setOperator(operator == null ? "" : operator);
         log.setRemark(remark);
-        mallInventoryLogMapper.insert(log);
+        try
+        {
+            mallInventoryLogMapper.insert(log);
+            return log;
+        }
+        catch (DuplicateKeyException ex)
+        {
+            return null;
+        }
+    }
+
+    private void completeLog(MallInventoryLog log, MallSku after)
+    {
+        log.setAfterTotal(nz(after.getStockTotal()));
+        log.setAfterLocked(nz(after.getStockLocked()));
+        log.setAfterAvailable(nz(after.getStockAvailable()));
+        if (mallInventoryLogMapper.updateById(log) == 0)
+        {
+            throw new ServiceException("库存流水更新失败", HttpStatus.ERROR);
+        }
     }
 
     private int nz(Integer value)
@@ -174,5 +218,34 @@ public class MallSkuStockServiceImpl implements MallSkuStockService
         {
             throw new ServiceException("库存数量必须大于0", HttpStatus.BAD_REQUEST);
         }
+        if (qty > MallProductConstants.MAX_INVENTORY_CHANGE_QUANTITY)
+        {
+            throw new ServiceException("单次库存数量不能超过" + MallProductConstants.MAX_INVENTORY_CHANGE_QUANTITY,
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private String normalizeBizId(String bizId)
+    {
+        if (!StringUtils.hasText(bizId))
+        {
+            throw new ServiceException("库存业务单号不能为空", HttpStatus.BAD_REQUEST);
+        }
+        String normalized = bizId.trim();
+        if (normalized.length() > 64)
+        {
+            throw new ServiceException("库存业务单号长度不能超过64个字符", HttpStatus.BAD_REQUEST);
+        }
+        return normalized;
+    }
+
+    private String buildIdempotencyKey(Long skuId, String changeType, String bizType, String bizId)
+    {
+        if (skuId == null || !StringUtils.hasText(changeType)
+                || !StringUtils.hasText(bizType) || !StringUtils.hasText(bizId))
+        {
+            return null;
+        }
+        return bizType + ':' + bizId.trim() + ':' + skuId + ':' + changeType;
     }
 }

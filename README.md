@@ -1,60 +1,33 @@
 # NovaMall
 
-NovaMall 管理平台：完整系统管理 + 博客业务（文章 / 评论 / 上传 / AI / 账单识别），并向电商能力演进。
+NovaMall 管理平台：完整系统管理、博客与 AI、微信公众号运营、电商商品/交易/支付，以及 History 历史学习平台。
 
 ## 架构
 
 前后端分离，**UI 只在仓库根目录 `frontend/`，`backend/` 为纯 Java 后端**。
 
-- **backend**：Maven 多模块 + `ruoyi-blog` + `ruoyi-wechat` + `ruoyi-mall-*`（商品/交易/支付）
-  - `ruoyi-admin`（启动入口）、`ruoyi-framework`、`ruoyi-system`、`ruoyi-common`、`ruoyi-quartz`、`ruoyi-generator`、`ruoyi-blog`、`ruoyi-mall-product`、`ruoyi-mall-trade`、`ruoyi-mall-payment`
-- **frontend**：Vue3 + Element Plus，含管理后台、公开博客 `/blog`、公开商城 `/mall`
+- **backend**：Maven 多模块 + `ruoyi-blog` + `ruoyi-wechat` + `ruoyi-mall-*`（商品/交易/支付）+ `ruoyi-history`
+  - `ruoyi-admin`（启动入口）、RuoYi 基础模块，以及博客、微信、商城和历史学习业务模块
+- **frontend**：Vue3 + Element Plus，含管理后台、公开博客 `/blog`、公开商城 `/mall`、公开历史学习站 `/history`
 - **数据**：MySQL `nova_mall` + Redis（Token）
 
 ## 本地开发
 
 ### 1. 初始化数据库
 
-按顺序执行 `sql/` 下脚本（或使用 Docker 自动初始化）：
+新建本地数据库推荐使用 Docker 自动初始化：
 
 ```bash
-mysql -u root -p < sql/00-init-db.sql
-mysql -u root -p < sql/ry_base.sql
-mysql -u root -p < sql/quartz.sql
-mysql -u root -p < sql/blog_schema.sql
-mysql -u root -p < sql/blog_comment_schema.sql
-mysql -u root -p < sql/blog_notification_schema.sql
-mysql -u root -p < sql/blog_notification_menu_fix.sql
-mysql -u root -p < sql/blog_comment_menu_route_fix.sql
-mysql -u root -p < sql/blog_analytics_schema.sql
-mysql -u root -p < sql/blog_menu_seed.sql
-mysql -u root -p < sql/blog_hn_schema.sql
-mysql -u root -p < sql/blog_hn_menu_seed.sql
-mysql -u root -p < sql/blog_hn_job_seed.sql
-mysql -u root -p < sql/wechat_schema.sql
-mysql -u root -p < sql/wechat_menu_route_fix.sql
-mysql -u root -p < sql/ai_provider_schema.sql
-mysql -u root -p < sql/ai_module_config_schema.sql
-mysql -u root -p < sql/ai_provider_auth_mode.sql
-mysql -u root -p < sql/mall_category_brand_schema.sql
-mysql -u root -p < sql/mall_product_schema.sql
-mysql -u root -p < sql/mall_attr_front_category_schema.sql
-mysql -u root -p < sql/mall_phase_b_migrate_front_category.sql
-# 若 migrate 中途失败导致 front 表半写入，先 TRUNCATE mall_front_category_rel / mall_front_category 再重跑 migrate
-mysql -u root -p < sql/mall_address_schema.sql
-mysql -u root -p < sql/mall_cart_order_schema.sql
-mysql -u root -p < sql/mall_payment_schema.sql
-mysql -u root -p < sql/mall_menu_seed.sql
-mysql -u root -p < sql/mall_phase_b_menu_seed.sql
-mysql -u root -p < sql/mall_menu_path_fix.sql
-mysql -u root -p < sql/mall_order_job_seed.sql
-# 可选演示数据：mysql -u root -p < sql/mall_demo_seed.sql
-# 可选 Phase B 演示：mysql -u root -p < sql/mall_phase_b_attr_demo_seed.sql
+cp .env.example .env
+# 至少修改 MYSQL_ROOT_PASSWORD 和 TOKEN_SECRET
+docker compose --env-file .env up mysql redis -d
 ```
+
+Compose 的初始化清单已包含当前 Product V2、Payment、History 与 HN 所需脚本。MySQL 只会在空数据卷首次启动时执行初始化；存量库升级不会由部署流程自动执行，必须先备份并按照 [数据库初始化与升级说明](docs/database-upgrade.md) 手工处理。
 
 > 后台商城菜单路由为 `/mall-admin/**`（如 `/mall-admin/spu`）；C 端商城为 `/mall`（如 `/mall`、`/mall/list`）。二者不可共用 `mall` 前缀，否则刷新后台页会 404。
 
-修改 `backend/ruoyi-admin/src/main/resources/application-druid.yml` 中的数据库账号，库名建议 `nova_mall`。
+非 Docker 本机启动时，修改 `backend/ruoyi-admin/src/main/resources/application-druid.yml` 中的数据库账号，库名建议 `nova_mall`。
 
 ### 2. 启动 Redis
 
@@ -64,16 +37,18 @@ Token 依赖 Redis，本地需运行 Redis（默认 `localhost:6379`）。
 
 ```bash
 cd backend
-mvn spring-boot:run -pl ruoyi-admin
+# Linux/macOS：export TOKEN_SECRET="$(openssl rand -hex 64)"
+# PowerShell：$env:TOKEN_SECRET = '<本地随机密钥>'
+mvn spring-boot:run -pl ruoyi-admin -am
 ```
 
-默认账号：`admin` / `admin123`
+首次初始化账号为 `admin` / `admin123`，仅用于本地启动；首次登录后应立即修改密码。
 
 ### 4. 启动前端
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -87,12 +62,12 @@ docker login crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com
 
 # 2. 在仓库根目录构建
 cd NovaMall
-docker build -f frontend/Dockerfile -t crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/lxf_ai/nova-mall-web:latest .
-docker build -f backend/Dockerfile -t crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/lxf_ai/nova-mall-server:latest .
+docker build -f frontend/Dockerfile -t crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/nova_mall/nova-mall-frontend:latest .
+docker build -f backend/Dockerfile -t crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/nova_mall/nova-mall-backend:latest .
 
 # 3. 推送（构建成功后再 push）
-docker push crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/lxf_ai/nova-mall-web:latest
-docker push crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/lxf_ai/nova-mall-server:latest
+docker push crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/nova_mall/nova-mall-frontend:latest
+docker push crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/nova_mall/nova-mall-backend:latest
 ```
 
 常见错误：
@@ -156,11 +131,19 @@ docker build -f frontend/Dockerfile \
 
 ```bash
 cp .env.example .env
-# 可选：编辑 DEEPSEEK_API_KEY 作为回退；推荐登录后台「AI博客 → AI模型配置」添加多厂商 Key
+# 修改数据库密码；使用 `openssl rand -hex 64` 生成 TOKEN_SECRET
 docker compose --env-file .env up -d --build
-# 或（云主机 / CI 推荐，失败会 exit 1 并打印后端日志）
-chmod +x deploy.sh && ./deploy.sh
 ```
+
+AI Provider 统一在后台「AI博客 → AI模型配置」中维护，不再读取 `DEEPSEEK_API_KEY` 回退变量。本地 Docker 默认只开启 Mock 支付，Swagger/Druid 需在 `.env` 显式开启；`docker-compose.prod.yml` 固定关闭三者，且生产启动必须显式提供 `TOKEN_SECRET`。
+
+ECS 生产发布由 `.github/workflows/deploy-ecs.yml` 负责，使用 commit SHA 镜像。GitHub Environment `production` 至少需要配置：
+
+- Secret：`TOKEN_SECRET`、ACR、ECS SSH、MySQL、Redis 凭据；
+- Variable：MySQL/Redis 地址与端口、服务端口、日志路径（推荐 `/opt/nova-mall/logs`）；
+- OSS 关闭时无需填写 OSS Key；启用时再配置 Key、Bucket、Endpoint/Domain。
+
+生产发布只更新应用容器，不会自动执行 SQL。升级代码前先完成 [存量数据库手工升级](docs/database-upgrade.md#存量数据库手工升级)。
 
 ### 云部署报错 `ExitCode expect in [0] but is 1`
 
@@ -170,7 +153,7 @@ chmod +x deploy.sh && ./deploy.sh
 |------|------|------|
 | 1 | `docker compose build backend 2>&1 \| tail -50` | Maven 构建失败：检查网络、是否上传完整 `backend/` |
 | 2 | `docker compose build frontend 2>&1 \| tail -50` | 前端构建失败：需存在 `frontend/package-lock.json` |
-| 3 | `docker compose logs mysql` | 初始化 SQL 失败：删卷重来 `docker compose down -v` |
+| 3 | `docker compose logs mysql` | 初始化 SQL 失败：仅对可丢弃的本地空库可重建数据卷；生产库必须从备份修复，禁止直接 `down -v` |
 | 4 | `docker compose logs backend` | 连不上 MySQL/Redis：确认 mysql、redis 已 healthy |
 | 5 | `docker compose ps` | backend 未 healthy：首次启动约 1–2 分钟，已放宽 `start_period` |
 
@@ -186,7 +169,9 @@ cd frontend && npm ci && npm run build:prod
 | http://localhost | 前端（Nginx 反代 `/prod-api` → 后端） |
 | http://localhost:8080 | 后端 API |
 | http://localhost/blog | 博客公开前台 |
-| 登录后侧边栏 | 系统管理 + AI博客 |
+| http://localhost/mall | 商城公开前台 |
+| http://localhost/history | 历史学习公开前台 |
+| 登录后侧边栏 | 系统管理 + AI博客 + 微信运营 + 商城管理 + 历史学习 |
 
 ## 权限说明
 
@@ -205,10 +190,15 @@ NovaMall/
 │   ├── ruoyi-common/
 │   ├── ruoyi-quartz/
 │   ├── ruoyi-generator/
-│   └── ruoyi-blog/       # 博客业务扩展
-├── frontend/             # 唯一前端（管理后台 + 博客页面）
-├── sql/                  # 数据库初始化
-├── docker/               # Dockerfile 与 Nginx
+│   ├── ruoyi-blog/
+│   ├── ruoyi-wechat/
+│   ├── ruoyi-mall-product/
+│   ├── ruoyi-mall-trade/
+│   ├── ruoyi-mall-payment/
+│   └── ruoyi-history/
+├── frontend/             # 唯一前端；Dockerfile 与 nginx.conf 也在此目录
+├── sql/                  # 数据库基线、升级与演示数据
+├── docs/                 # 架构、实施与数据库升级说明
 └── docker-compose.yml
 ```
 

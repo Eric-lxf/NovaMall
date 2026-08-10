@@ -6,11 +6,27 @@ spring:
         url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:nova_mall}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
         username: ${MYSQL_USER:root}
         password: ${MYSQL_PASSWORD:password}
+      # Docker 默认按生产方式关闭 Druid 控制台；本地 Compose 可显式开启。
+      statViewServlet:
+        enabled: ${DRUID_STAT_ENABLED:false}
+      webStatFilter:
+        enabled: ${DRUID_STAT_ENABLED:false}
   data:
     redis:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
+
+# Docker 环境不允许回退到仓库内固定密钥，缺失时直接阻止应用启动。
+token:
+  secret: ${TOKEN_SECRET}
+
+# API 文档在 Docker/生产环境默认关闭；仅在受控环境显式开启。
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
 
 ruoyi:
   profile: ${RUOYI_PROFILE:/data/uploads}

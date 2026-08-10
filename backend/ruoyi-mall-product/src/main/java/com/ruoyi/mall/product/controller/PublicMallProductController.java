@@ -14,7 +14,7 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.mall.product.dto.MallSpuPageQuery;
 import com.ruoyi.mall.product.service.MallFrontCategoryService;
 import com.ruoyi.mall.product.service.MallSpuService;
-import com.ruoyi.mall.product.vo.MallSpuVO;
+import com.ruoyi.mall.product.vo.MallPublicSpuVO;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,7 +30,7 @@ public class PublicMallProductController extends MallProductControllerSupport
     @GetMapping("/spus")
     public TableDataInfo spus(@Valid MallSpuPageQuery query)
     {
-        Page<MallSpuVO> page = mallSpuService.publicPage(query);
+        Page<MallPublicSpuVO> page = mallSpuService.publicPage(query);
         return mpPageTable(page);
     }
 

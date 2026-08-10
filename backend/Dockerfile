@@ -18,9 +18,11 @@ RUN mvn -B -DskipTests package -pl ruoyi-admin -am
 FROM crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/lxf_ai/maven:3.9-eclipse-temurin-17
 WORKDIR /app
 RUN apt-get update && apt-get install -y wget \
-    && groupadd -r app && useradd -r -g app app \
-    && mkdir -p /data/uploads \
-    && chown -R app:app /data/uploads /app
+    && groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /data/uploads /home/ruoyi/logs \
+    && chown -R app:app /data/uploads /home/ruoyi/logs /app \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/ruoyi-admin/target/ruoyi-admin.jar app.jar
 USER app
 EXPOSE 8080

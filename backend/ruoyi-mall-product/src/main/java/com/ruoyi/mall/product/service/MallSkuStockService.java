@@ -1,5 +1,7 @@
 package com.ruoyi.mall.product.service;
 
+import java.util.UUID;
+
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.mall.product.service.dto.MallSkuInfo;
 
@@ -18,7 +20,7 @@ public interface MallSkuStockService
     @Deprecated
     default boolean deductStock(Long skuId, int qty)
     {
-        return lockStock(skuId, qty, null, "system");
+        return lockStock(skuId, qty, legacyBizId(), "system");
     }
 
     @Deprecated
@@ -35,7 +37,7 @@ public interface MallSkuStockService
     @Deprecated
     default void restoreStock(Long skuId, int qty)
     {
-        unlockStock(skuId, qty, null, "system");
+        unlockStock(skuId, qty, legacyBizId(), "system");
     }
 
     @Deprecated
@@ -49,4 +51,9 @@ public interface MallSkuStockService
     }
 
     MallSkuInfo getEnabledSku(Long skuId);
+
+    private static String legacyBizId()
+    {
+        return "legacy-" + UUID.randomUUID();
+    }
 }

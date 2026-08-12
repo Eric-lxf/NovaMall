@@ -1,8 +1,23 @@
 SET NAMES utf8mb4;
 USE nova_mall;
 
-ALTER TABLE blog_article
-  ADD COLUMN author_user_id bigint DEFAULT NULL COMMENT '作者用户ID' AFTER category_id;
+-- 新版 blog_schema.sql 已包含 author_user_id；兼容尚未执行过该升级的存量库，
+-- 同时避免空库初始化时重复 ADD COLUMN 中断后续脚本。
+SET @author_user_id_exists := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'blog_article'
+    AND COLUMN_NAME = 'author_user_id'
+);
+SET @add_author_user_id_sql := IF(
+  @author_user_id_exists = 0,
+  'ALTER TABLE blog_article ADD COLUMN author_user_id bigint DEFAULT NULL COMMENT ''作者用户ID'' AFTER category_id',
+  'SELECT 1'
+);
+PREPARE add_author_user_id_stmt FROM @add_author_user_id_sql;
+EXECUTE add_author_user_id_stmt;
+DEALLOCATE PREPARE add_author_user_id_stmt;
 
 UPDATE blog_article SET author_user_id = 1 WHERE author_user_id IS NULL;
 

@@ -159,6 +159,16 @@ blog:
   file:
     upload-dir: ./uploads
     url-prefix: /uploads
+  # 外部博客写入 API：默认关闭，仅在完成数据库升级和客户端配置后显式开启。
+  external-api:
+    enabled: false
+    schema-ready: false
+    require-https: false
+    token-ttl-seconds: 900
+    idempotency-ttl-hours: 72
+    audit-retention-days: 90
+    max-body-bytes: 1048576
+    default-rate-limit-per-minute: 60
   notification:
     from: ${MAIL_FROM:noreply@localhost}
     email:

@@ -1,31 +1,24 @@
-package com.ruoyi.blog.vo;
+package com.ruoyi.blog.external.vo;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 import lombok.Data;
 
+/** 列表响应不返回正文，避免分页查询放大响应体。 */
 @Data
-public class ArticleVO
+public class ExternalArticleSummaryVO
 {
-
     private Long id;
+    private String externalId;
     private String title;
     private String summary;
-    private String content;
     private String coverImage;
     private Long categoryId;
     private String categoryName;
-    private String sourceType;
-    private Long sourceClientId;
-    private String externalId;
     private List<Long> tagIds;
     private List<String> tagNames;
     private Integer status;
-    private Integer isAiGenerated;
-    private Integer viewCount;
-    /** 评论总数（含回复） */
-    private Long commentCount;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

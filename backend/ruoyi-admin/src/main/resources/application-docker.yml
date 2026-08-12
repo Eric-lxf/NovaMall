@@ -35,6 +35,10 @@ blog:
   file:
     upload-dir: ${RUOYI_PROFILE:/data/uploads}
     url-prefix: /uploads
+  external-api:
+    enabled: ${BLOG_EXTERNAL_API_ENABLED:false}
+    schema-ready: ${BLOG_EXTERNAL_API_SCHEMA_READY:false}
+    require-https: ${BLOG_EXTERNAL_API_REQUIRE_HTTPS:false}
 
 management:
   endpoints:

@@ -23,6 +23,10 @@ public class BlogArticle
     private String coverImage;
     private Long categoryId;
     private Long authorUserId;
+    /** ADMIN / EXTERNAL_API */
+    private String sourceType;
+    private Long sourceClientId;
+    private String externalId;
     /** 0-草稿, 1-已发布, 2-AI生成中 */
     private Integer status;
     private Integer isAiGenerated;

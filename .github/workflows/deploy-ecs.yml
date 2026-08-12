@@ -190,6 +190,11 @@ jobs:
           NOVAMALL_OSS_ENDPOINT: ${{ vars.NOVAMALL_OSS_ENDPOINT }}
           NOVAMALL_OSS_DOMAIN: ${{ vars.NOVAMALL_OSS_DOMAIN }}
 
+          BLOG_EXTERNAL_API_ENABLED: ${{ vars.BLOG_EXTERNAL_API_ENABLED }}
+          BLOG_EXTERNAL_API_SCHEMA_READY: ${{ vars.BLOG_EXTERNAL_API_SCHEMA_READY }}
+          BLOG_EXTERNAL_API_TRUSTED_PROXY_IP: ${{ vars.BLOG_EXTERNAL_API_TRUSTED_PROXY_IP }}
+          BLOG_EXTERNAL_API_FORWARDED_PROTO: ${{ vars.BLOG_EXTERNAL_API_FORWARDED_PROTO }}
+
           BACKEND_PORT: ${{ vars.BACKEND_PORT }}
           FRONTEND_PORT: ${{ vars.FRONTEND_PORT }}
           RUOYI_LOG_PATH: ${{ vars.RUOYI_LOG_PATH }}
@@ -198,7 +203,7 @@ jobs:
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_PRIVATE_KEY }}
           fingerprint: ${{ secrets.ECS_SSH_FINGERPRINT }}
-          envs: ACR_REGISTRY,ACR_NAMESPACE,BACKEND_IMAGE_NAME,FRONTEND_IMAGE_NAME,IMAGE_TAG,ACR_USERNAME,ACR_PASSWORD,TOKEN_SECRET,MYSQL_USER,MYSQL_PASSWORD,REDIS_PASSWORD,NOVAMALL_OSS_KEY_ID,NOVAMALL_OSS_KEY_SECRET,MYSQL_HOST,MYSQL_PORT,MYSQL_DATABASE,REDIS_HOST,REDIS_PORT,NOVAMALL_OSS_ENABLED,NOVAMALL_OSS_BUCKET,NOVAMALL_OSS_ENDPOINT,NOVAMALL_OSS_DOMAIN,BACKEND_PORT,FRONTEND_PORT,RUOYI_LOG_PATH
+          envs: ACR_REGISTRY,ACR_NAMESPACE,BACKEND_IMAGE_NAME,FRONTEND_IMAGE_NAME,IMAGE_TAG,ACR_USERNAME,ACR_PASSWORD,TOKEN_SECRET,MYSQL_USER,MYSQL_PASSWORD,REDIS_PASSWORD,NOVAMALL_OSS_KEY_ID,NOVAMALL_OSS_KEY_SECRET,MYSQL_HOST,MYSQL_PORT,MYSQL_DATABASE,REDIS_HOST,REDIS_PORT,NOVAMALL_OSS_ENABLED,NOVAMALL_OSS_BUCKET,NOVAMALL_OSS_ENDPOINT,NOVAMALL_OSS_DOMAIN,BLOG_EXTERNAL_API_ENABLED,BLOG_EXTERNAL_API_SCHEMA_READY,BLOG_EXTERNAL_API_TRUSTED_PROXY_IP,BLOG_EXTERNAL_API_FORWARDED_PROTO,BACKEND_PORT,FRONTEND_PORT,RUOYI_LOG_PATH
           script: |
             set -euo pipefail
 
@@ -226,6 +231,39 @@ jobs:
             NOVAMALL_OSS_BUCKET="${NOVAMALL_OSS_BUCKET:-}"
             NOVAMALL_OSS_ENDPOINT="${NOVAMALL_OSS_ENDPOINT:-oss-cn-beijing.aliyuncs.com}"
             NOVAMALL_OSS_DOMAIN="${NOVAMALL_OSS_DOMAIN:-}"
+            BLOG_EXTERNAL_API_ENABLED="${BLOG_EXTERNAL_API_ENABLED:-false}"
+            BLOG_EXTERNAL_API_SCHEMA_READY="${BLOG_EXTERNAL_API_SCHEMA_READY:-false}"
+            BLOG_EXTERNAL_API_TRUSTED_PROXY_IP="${BLOG_EXTERNAL_API_TRUSTED_PROXY_IP:-}"
+            BLOG_EXTERNAL_API_FORWARDED_PROTO="${BLOG_EXTERNAL_API_FORWARDED_PROTO:-}"
+            case "$BLOG_EXTERNAL_API_ENABLED" in
+              true|false) ;;
+              *) echo "BLOG_EXTERNAL_API_ENABLED must be true or false" >&2; exit 1 ;;
+            esac
+            case "$BLOG_EXTERNAL_API_SCHEMA_READY" in
+              true|false) ;;
+              *) echo "BLOG_EXTERNAL_API_SCHEMA_READY must be true or false" >&2; exit 1 ;;
+            esac
+            if [ "$BLOG_EXTERNAL_API_ENABLED" = "true" ]; then
+              if [ "$BLOG_EXTERNAL_API_SCHEMA_READY" != "true" ]; then
+                echo "Set BLOG_EXTERNAL_API_SCHEMA_READY only after executing V2.7.0" >&2
+                exit 1
+              fi
+              test -n "$BLOG_EXTERNAL_API_TRUSTED_PROXY_IP"
+              if ! printf '%s\n' "$BLOG_EXTERNAL_API_TRUSTED_PROXY_IP" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+                echo "BLOG_EXTERNAL_API_TRUSTED_PROXY_IP must be a single IPv4 address" >&2
+                exit 1
+              fi
+              if ! printf '%s\n' "$BLOG_EXTERNAL_API_TRUSTED_PROXY_IP" | awk -F. 'NF == 4 { for (i = 1; i <= 4; i++) if ($i !~ /^[0-9]+$/ || $i > 255) exit 1; exit 0 } END { if (NF != 4) exit 1 }'; then
+                echo "BLOG_EXTERNAL_API_TRUSTED_PROXY_IP contains an invalid IPv4 octet" >&2
+                exit 1
+              fi
+              if [ "$BLOG_EXTERNAL_API_FORWARDED_PROTO" != "https" ]; then
+                echo "External API production traffic must terminate TLS before Nginx" >&2
+                exit 1
+              fi
+            fi
+            BLOG_EXTERNAL_API_TRUSTED_PROXY_IP="${BLOG_EXTERNAL_API_TRUSTED_PROXY_IP:-127.0.0.1}"
+            BLOG_EXTERNAL_API_FORWARDED_PROTO="${BLOG_EXTERNAL_API_FORWARDED_PROTO:-http}"
             if [ "$NOVAMALL_OSS_ENABLED" = "true" ] || [ "$NOVAMALL_OSS_ENABLED" = "1" ]; then
               test -n "$NOVAMALL_OSS_KEY_ID"
               test -n "$NOVAMALL_OSS_KEY_SECRET"
@@ -254,6 +292,11 @@ jobs:
               printf 'NOVAMALL_OSS_ENDPOINT=%s\n' "$NOVAMALL_OSS_ENDPOINT"
               printf 'NOVAMALL_OSS_DOMAIN=%s\n' "$NOVAMALL_OSS_DOMAIN"
 
+              printf 'BLOG_EXTERNAL_API_ENABLED=%s\n' "$BLOG_EXTERNAL_API_ENABLED"
+              printf 'BLOG_EXTERNAL_API_SCHEMA_READY=%s\n' "$BLOG_EXTERNAL_API_SCHEMA_READY"
+              printf 'BLOG_EXTERNAL_API_TRUSTED_PROXY_IP=%s\n' "$BLOG_EXTERNAL_API_TRUSTED_PROXY_IP"
+              printf 'BLOG_EXTERNAL_API_FORWARDED_PROTO=%s\n' "$BLOG_EXTERNAL_API_FORWARDED_PROTO"
+
               printf 'BACKEND_PORT=%s\n' "$BACKEND_PORT"
               printf 'FRONTEND_PORT=%s\n' "$FRONTEND_PORT"
               printf 'RUOYI_LOG_PATH=%s\n' "$RUOYI_LOG_PATH"
@@ -271,12 +314,17 @@ jobs:
             docker compose --env-file .env -f docker-compose.prod.yml config -q
             docker compose --env-file .env -f docker-compose.prod.yml pull backend frontend
 
+            # 使用最终环境变量渲染镜像内模板并执行 Nginx 原生语法校验。
+            docker compose --env-file .env -f docker-compose.prod.yml run \
+              --rm --no-deps --entrypoint /bin/sh frontend \
+              -c 'set -eu; /docker-entrypoint.d/20-envsubst-on-templates.sh; nginx -t'
+
             # SSH 部署用户无需宿主机 chown 权限；由 Docker root 临时容器初始化 bind mount。
             docker compose --env-file .env -f docker-compose.prod.yml run \
               --rm --no-deps --user 0:0 --entrypoint sh backend \
               -c 'set -eu; owner="$(id -u app):$(id -g app)"; chown -R "$owner" -- /home/ruoyi/logs; chmod 0750 -- /home/ruoyi/logs; actual="$(stat -c %u:%g /home/ruoyi/logs)"; [ "$actual" = "$owner" ]'
 
-            docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans --wait --wait-timeout 180
 
             docker image prune -f
             docker compose --env-file .env -f docker-compose.prod.yml ps

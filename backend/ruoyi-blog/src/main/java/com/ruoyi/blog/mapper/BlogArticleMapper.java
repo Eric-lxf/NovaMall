@@ -30,7 +30,8 @@ public interface BlogArticleMapper extends BaseMapper<BlogArticle>
 
     @Select("""
             <script>
-            SELECT id, title, summary, content, html_content, cover_image, category_id, status,
+            SELECT id, title, summary, content, html_content, cover_image, category_id,
+                   source_type, source_client_id, external_id, status,
                    is_ai_generated, view_count, create_time, update_time, is_deleted
             FROM blog_article WHERE is_deleted = 1
             <if test='keyword != null and keyword != ""'>
@@ -44,7 +45,8 @@ public interface BlogArticleMapper extends BaseMapper<BlogArticle>
             @Param("limit") long limit);
 
     @Select("""
-            SELECT id, title, summary, content, html_content, cover_image, category_id, status,
+            SELECT id, title, summary, content, html_content, cover_image, category_id,
+                   source_type, source_client_id, external_id, status,
                    is_ai_generated, view_count, create_time, update_time, is_deleted
             FROM blog_article WHERE id = #{id} AND is_deleted = 1
             """)

@@ -95,6 +95,15 @@ onMounted(loadData)
     <el-table v-loading="loading" :data="tableData" stripe>
       <el-table-column prop="title" label="标题" min-width="200" class-name="col-title" />
       <el-table-column prop="categoryName" label="分类" width="120" />
+      <el-table-column label="来源" width="120">
+        <template #default="{ row }">
+          <el-tooltip v-if="row.sourceType === 'EXTERNAL_API' && row.externalId" :content="`外部 ID：${row.externalId}`">
+            <el-tag type="warning">外部 API</el-tag>
+          </el-tooltip>
+          <el-tag v-else-if="row.sourceType === 'EXTERNAL_API'" type="warning">外部 API</el-tag>
+          <el-tag v-else type="info">管理后台</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="状态" width="110">
         <template #default="{ row }">
           <el-tag :type="statusMap[row.status]?.type || 'info'">

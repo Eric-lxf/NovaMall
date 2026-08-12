@@ -59,6 +59,8 @@ services:
       - ./sql/blog_hn_schema.sql:/docker-entrypoint-initdb.d/38-blog_hn_schema.sql:ro
       - ./sql/blog_hn_menu_seed.sql:/docker-entrypoint-initdb.d/39-blog_hn_menu_seed.sql:ro
       - ./sql/blog_hn_job_seed.sql:/docker-entrypoint-initdb.d/40-blog_hn_job_seed.sql:ro
+      # 外部博客写入 API 客户端、幂等与审计表；依赖博客基线，保持追加顺序。
+      - ./sql/V2.7.0__blog_external_write_api.sql:/docker-entrypoint-initdb.d/41-V2.7.0__blog_external_write_api.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
       interval: 10s
@@ -98,6 +100,9 @@ services:
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       DRUID_STAT_ENABLED: ${DRUID_STAT_ENABLED:-false}
       MALL_PAYMENT_MOCK_ENABLED: ${MALL_PAYMENT_MOCK_ENABLED:-true}
+      BLOG_EXTERNAL_API_ENABLED: ${BLOG_EXTERNAL_API_ENABLED:-false}
+      BLOG_EXTERNAL_API_SCHEMA_READY: ${BLOG_EXTERNAL_API_SCHEMA_READY:-false}
+      BLOG_EXTERNAL_API_REQUIRE_HTTPS: ${BLOG_EXTERNAL_API_REQUIRE_HTTPS:-false}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: nova_mall
@@ -133,6 +138,8 @@ services:
         condition: service_healthy
     environment:
       BACKEND_HOST: ${BACKEND_HOST:-backend}
+      BLOG_EXTERNAL_API_TRUSTED_PROXY_IP: ${BLOG_EXTERNAL_API_TRUSTED_PROXY_IP:-127.0.0.1}
+      BLOG_EXTERNAL_API_FORWARDED_PROTO: ${BLOG_EXTERNAL_API_FORWARDED_PROTO:-http}
     ports:
       - "${FRONTEND_PORT:-80}:80"
 

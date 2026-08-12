@@ -11,7 +11,10 @@ import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerIntercept
  * MyBatis-Plus 分页插件与本模块 Mapper 扫描。
  */
 @Configuration
-@MapperScan("com.ruoyi.blog.mapper")
+@MapperScan({
+    "com.ruoyi.blog.mapper",
+    "com.ruoyi.blog.external.mapper"
+})
 public class BlogMybatisPlusConfig
 {
 

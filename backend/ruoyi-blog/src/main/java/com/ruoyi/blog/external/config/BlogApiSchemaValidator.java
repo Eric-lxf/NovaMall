@@ -26,6 +26,10 @@ public class BlogApiSchemaValidator implements ApplicationRunner
             throw new IllegalStateException(
                     "BLOG_EXTERNAL_API_ENABLED requires BLOG_EXTERNAL_API_SCHEMA_READY=true after V2.7 migration");
         }
+        if (!properties.isSchemaReady())
+        {
+            return;
+        }
         int tableCount = count("""
                 SELECT COUNT(*)
                 FROM information_schema.tables

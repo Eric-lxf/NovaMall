@@ -33,8 +33,7 @@ RUN npm run build:prod
 
 FROM crpi-skinyl3l0124ry6m.cn-beijing.personal.cr.aliyuncs.com/lxf_ai/nginx:1.27-alpine
 ENV BACKEND_HOST=backend \
-    BLOG_EXTERNAL_API_TRUSTED_PROXY_IP=127.0.0.1 \
-    BLOG_EXTERNAL_API_FORWARDED_PROTO=http
+    BLOG_EXTERNAL_API_TRUSTED_PROXY_IP=127.0.0.1
 COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

@@ -1,10 +1,10 @@
-# 外部博客 API 鉴权简化设计
+# 外部博客 API HTTP 访问设计
 
 ## 目标
 
-将外部博客 API 从按 Scope 授权简化为仅校验客户端 Token。任何有效且未停用客户端签发的 Bearer Token，均可访问全部已开放接口。
+生产环境允许通过公网 HTTP 调用外部博客 API。请求仍须经过指定的负载均衡或反向代理，再以 HTTP 转发到 NovaMall Nginx。
 
-生产环境允许公网 HTTP。请求仍须经过指定的负载均衡或反向代理，再以 HTTP 转发到 NovaMall Nginx。
+现有 Scope 权限模型保持不变，本次不调整客户端权限、Token 授权或业务路由权限。
 
 ## 已确认的安全取舍
 
@@ -20,31 +20,25 @@
 - 客户端只能读取自己创建的文章；
 - 未声明的路径和 HTTP 方法继续拒绝。
 
-## 鉴权行为
+## Scope 权限
 
 ### Token 签发
 
 `POST /open-api/v1/oauth/token` 继续使用 HTTP Basic Client Credentials。
 
-`scope` 请求参数继续接受以兼容现有调用方，但服务端忽略其内容。Token 不再携带或依赖权限范围。
+客户端可请求其已配置 Scope 的全部或子集。服务端继续拒绝未配置或不受支持的 Scope。
 
 ### 业务接口
 
-分类、标签、草稿创建、自有文章列表和详情接口统一要求：
+现有权限映射保持不变：
 
-1. Bearer Token 存在且有效；
-2. 客户端处于启用状态；
-3. Token 的客户端和 Secret 版本仍匹配；
-4. 请求未超过限流。
+| Scope | 能力 |
+|---|---|
+| `blog.article.create` | 创建草稿 |
+| `blog.article.read.own` | 查询该客户端自己创建的文章 |
+| `blog.taxonomy.read` | 查询分类和标签 |
 
-通过以上校验后即可访问全部开放接口，不再执行 Scope 权限判断。
-
-### 现有客户端与 Token
-
-- 数据库现有 `scopes` 字段和数据保留，但不再参与运行时鉴权；
-- 不执行数据库迁移；
-- 已签发且仍有效的 Token 立即获得全部开放接口权限；
-- 管理接口不再要求调用方选择 Scope。
+客户端配置、Token 会话和 Spring Security 路由继续校验 Scope。现有客户端和已签发 Token 的权限行为不变。
 
 ## HTTP 与代理
 
@@ -57,30 +51,25 @@
 
 ## 管理页面
 
-外部 API 客户端页面移除：
-
-- 创建客户端时的 Scope 多选项；
-- 客户端列表中的 Scope 展示。
-
-继续保留客户端名称、状态、每分钟限额、Token 有效期和 Secret 轮换。
+外部 API 客户端页面保持不变，继续支持 Scope 选择和展示，以及客户端启停、限流、Token 有效期和 Secret 轮换。
 
 ## 兼容性
 
-- 旧调用方仍可提交 `scope`，请求不会失败；
-- 现有客户端记录无需迁移；
-- Token 响应保持现有 JSON 结构，`scope` 返回空字符串；
+- 现有客户端记录和 Scope 配置无需迁移；
+- Token 请求与响应结构不变；
+- 已签发 Token 的 Scope 权限不变；
 - 外部接口路径、请求体和业务响应不变。
 
 ## 错误处理
 
 - 无效客户端凭证继续返回 `401 invalid_client`；
 - 无效或过期 Token 继续返回 `401 invalid_token`；
-- 不再产生 `403 insufficient_scope`；
+- Scope 不合法继续返回 `400 invalid_scope`；
+- Token 缺少路由所需 Scope 继续返回 `403 insufficient_scope`；
 - 代理来源不匹配、限流、路径和方法错误保持现有行为。
 
 ## 验证
 
-- 后端测试验证请求 Scope 被忽略、无 Scope Token 可通过全部开放路由、旧 Token Scope 不影响校验；
-- 前端生产构建验证管理页面删除 Scope 后可正常创建客户端；
+- 后端测试验证现有 Scope 签发和路由授权行为未改变；
 - Compose 和部署工作流静态检查验证 HTTP 配置可用；
 - Maven 构建验证后端模块编译通过。

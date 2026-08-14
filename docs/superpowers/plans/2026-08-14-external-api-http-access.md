@@ -26,6 +26,7 @@
 - `backend/ruoyi-admin/src/main/resources/application.yml`：删除默认 HTTPS 开关。
 - `backend/ruoyi-admin/src/main/resources/application-docker.yml`：删除 Docker HTTPS 开关绑定。
 - `frontend/nginx.conf`：固定向后端传递 `X-Forwarded-Proto: http`。
+- `frontend/Dockerfile`、`frontend/Dockerfile.release`：前端镜像默认 `BLOG_EXTERNAL_API_TRUSTED_PROXY_IP`，与 Nginx 模板一致。
 - `docker-compose.yml`、`docker-compose.prod.yml`：删除 HTTPS 开关和可变转发协议。
 - `.env.example`：只保留外部 API 开关、Schema 就绪状态和受信代理 IP。
 - `.github/workflows/deploy-ecs.yml`：删除 HTTPS 协议变量、校验和落盘。

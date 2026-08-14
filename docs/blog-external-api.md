@@ -42,7 +42,7 @@ flowchart LR
 - [ ] 创建首个客户端并进行真实 MySQL/Redis/Nginx 冒烟；
 - [ ] 将生产功能开关灰度设为 `true`。
 
-根据当前项目约定，本次不新增自动化测试和质量门禁。
+本分支为 HTTP 访问变更补充了 `BlogApiAuthenticationFilterTest`（验证 Token 路径 HTTP 请求与审计记录）；其余外部 API 流程仍依赖编译与手工冒烟，未新增额外质量门禁。
 
 ## 3. 权限范围
 

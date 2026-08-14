@@ -1,5 +1,6 @@
 package com.ruoyi.blog.external.security;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -27,9 +28,10 @@ class BlogApiAuthenticationFilterTest
         BlogExternalApiProperties properties = new BlogExternalApiProperties();
         properties.setEnabled(true);
         BlogApiErrorWriter errorWriter = mock(BlogApiErrorWriter.class);
+        BlogApiAuditService auditService = mock(BlogApiAuditService.class);
         BlogApiAuthenticationFilter filter = new BlogApiAuthenticationFilter(properties,
                 mock(BlogApiOpaqueTokenService.class), mock(BlogApiClientAuthService.class),
-                mock(BlogApiRateLimiter.class), errorWriter, mock(BlogApiAuditService.class));
+                mock(BlogApiRateLimiter.class), errorWriter, auditService);
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/open-api/v1/oauth/token");
         request.setServletPath("/open-api/v1/oauth/token");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -37,8 +39,10 @@ class BlogApiAuthenticationFilterTest
 
         filter.doFilter(request, response, chain);
 
+        assertEquals(200, response.getStatus());
         verify(chain).doFilter(request, response);
         verify(errorWriter, never()).write(any(HttpServletRequest.class), any(HttpServletResponse.class),
                 any(), any(), any());
+        verify(auditService).record(request, response);
     }
 }

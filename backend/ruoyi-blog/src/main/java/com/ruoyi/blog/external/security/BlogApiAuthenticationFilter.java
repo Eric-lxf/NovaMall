@@ -60,11 +60,6 @@ public class BlogApiAuthenticationFilter extends OncePerRequestFilter
 
         try
         {
-            if (properties.isRequireHttps() && !isHttps(request))
-            {
-                throw new BlogApiException(HttpStatus.UPGRADE_REQUIRED, "https_required",
-                        "HTTPS is required for the external API");
-            }
             if (!TOKEN_PATH.equals(request.getServletPath()))
             {
                 authenticateBusinessRequest(request);
@@ -89,17 +84,6 @@ public class BlogApiAuthenticationFilter extends OncePerRequestFilter
         {
             auditService.record(request, response);
         }
-    }
-
-    private boolean isHttps(HttpServletRequest request)
-    {
-        if (request.isSecure())
-        {
-            return true;
-        }
-        String forwardedProto = request.getHeader("X-Forwarded-Proto");
-        return StringUtils.hasText(forwardedProto)
-                && "https".equalsIgnoreCase(forwardedProto.split(",", 2)[0].trim());
     }
 
     private void authenticateBusinessRequest(HttpServletRequest request)

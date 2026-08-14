@@ -20,9 +20,6 @@ public class BlogExternalApiProperties
     /** V2.7 schema 已安装；与公网开关分离，关闭公开流量后仍可执行保留期清理。 */
     private boolean schemaReady = false;
 
-    /** Docker/生产环境要求入口已经完成 TLS 终止。 */
-    private boolean requireHttps = false;
-
     /** 默认访问令牌有效期（秒）。 */
     private int tokenTtlSeconds = 900;
 

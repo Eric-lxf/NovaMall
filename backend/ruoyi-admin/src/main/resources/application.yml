@@ -163,7 +163,6 @@ blog:
   external-api:
     enabled: false
     schema-ready: false
-    require-https: false
     token-ttl-seconds: 900
     idempotency-ttl-hours: 72
     audit-retention-days: 90

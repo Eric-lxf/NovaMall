@@ -26,7 +26,6 @@ class BlogApiAuthenticationFilterTest
     {
         BlogExternalApiProperties properties = new BlogExternalApiProperties();
         properties.setEnabled(true);
-        properties.setRequireHttps(true);
         BlogApiErrorWriter errorWriter = mock(BlogApiErrorWriter.class);
         BlogApiAuthenticationFilter filter = new BlogApiAuthenticationFilter(properties,
                 mock(BlogApiOpaqueTokenService.class), mock(BlogApiClientAuthService.class),

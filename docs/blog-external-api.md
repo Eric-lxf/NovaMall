@@ -42,7 +42,7 @@ flowchart LR
 - [ ] 创建首个客户端并进行真实 MySQL/Redis/Nginx 冒烟；
 - [ ] 将生产功能开关灰度设为 `true`。
 
-根据当前项目约定，本次不新增自动化测试和质量门禁。
+本分支为 HTTP 访问变更补充了 `BlogApiAuthenticationFilterTest`（验证 Token 路径 HTTP 请求与审计记录）；其余外部 API 流程仍依赖编译与手工冒烟，未新增额外质量门禁。
 
 ## 3. 权限范围
 
@@ -62,7 +62,7 @@ flowchart LR
 4. 新建客户端，选择最小必要 scope、每分钟限额和 Token 有效期。
 5. 立即保存一次性展示的 Client ID 与 Client Secret。数据库只保存 BCrypt Hash，Secret 丢失后只能轮换。
 6. 将 `BLOG_EXTERNAL_API_SCHEMA_READY=true`，由启动预检核对三张表、三列和唯一索引。
-7. 在受信 TLS 负载均衡后部署时，配置其直接连接地址 `BLOG_EXTERNAL_API_TRUSTED_PROXY_IP`，并设置 `BLOG_EXTERNAL_API_FORWARDED_PROTO=https`。外部 API location 会按原始对端地址拒绝绕过负载均衡的直连请求。
+7. 配置负载均衡或反向代理的固定私网地址 `BLOG_EXTERNAL_API_TRUSTED_PROXY_IP`。外部 API location 会按原始对端地址拒绝绕过该代理的直连请求。
 8. 完成内部冒烟后设置 `BLOG_EXTERNAL_API_ENABLED=true` 并重新部署。
 
 建议 Token 有效期保持 5–15 分钟；系统默认 15 分钟，最大 60 分钟。
@@ -96,7 +96,7 @@ $clientSecret = '<client-secret>'
 $basic = [Convert]::ToBase64String([Text.Encoding]::GetEncoding('ISO-8859-1').GetBytes("${clientId}:${clientSecret}"))
 $tokenResponse = Invoke-RestMethod `
   -Method Post `
-  -Uri 'https://example.com/open-api/v1/oauth/token' `
+  -Uri 'http://example.com/open-api/v1/oauth/token' `
   -Headers @{ Authorization = "Basic $basic" } `
   -ContentType 'application/x-www-form-urlencoded' `
   -Body 'grant_type=client_credentials'
@@ -184,7 +184,7 @@ Authorization: Bearer <access-token>
 
 ## 10. 安全与运维约束
 
-- 生产只通过受信 TLS 入口开放 `/open-api/`；当前生产 Compose 要求 TLS 由负载均衡/WAF 终止。部署工作流在启用功能时强制校验 `BLOG_EXTERNAL_API_FORWARDED_PROTO=https` 和受信代理固定 IP；Nginx 同时按原始对端地址拒绝直连。负载均衡层配置 TLS 1.2+、HSTS，并禁止直达前端 80 端口。
+- 生产通过指定负载均衡/反向代理的 HTTP 入口开放 `/open-api/`，Nginx 按原始对端地址拒绝绕过代理的直连。公网 HTTP 会明文传输 Client Secret 和 Bearer Token，链路监听者可能获取完整接口权限。
 - 生产后端端口只绑定 `127.0.0.1`，外部调用不得绕过 Nginx。
 - Nginx 只信任自己生成的 Request ID，并覆盖转发的来源 IP 请求头。
 - Token 原文只返回调用方；Redis Key 使用 Token 的 SHA-256，不记录 Authorization、Secret 或完整正文。

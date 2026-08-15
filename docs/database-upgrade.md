@@ -63,7 +63,7 @@ mysql -h <host> -u <user> -p nova_mall < sql/V2.7.0__blog_external_write_api.sql
 
 该迁移创建 `blog_api_client`、`blog_api_idempotency`、`blog_api_audit`，为 `blog_article` 增加来源字段和唯一索引，并安装“外部API客户端”管理菜单。迁移不创建默认客户端，也不写入明文密钥；客户端 secret 仅在管理端创建或轮换时返回一次，数据库只保存 BCrypt hash。
 
-迁移完成后先保持功能关闭，完成下方结构检查后把生产变量 `BLOG_EXTERNAL_API_SCHEMA_READY` 设为 `true` 并部署。应用会再次以只读方式校验三张表、`blog_article` 三个来源列和关键唯一索引；结构不完整时启动失败。随后通过管理端创建客户端，确认 TLS/受信代理配置后，再将 `BLOG_EXTERNAL_API_ENABLED` 改为 `true` 并重新部署。关闭公开 API 时保留 `BLOG_EXTERNAL_API_SCHEMA_READY=true`，让审计与幂等清理任务继续运行。允许的 scope 固定为：
+迁移完成后先保持功能关闭，完成下方结构检查后把生产变量 `BLOG_EXTERNAL_API_SCHEMA_READY` 设为 `true` 并部署。应用会再次以只读方式校验三张表、`blog_article` 三个来源列和关键唯一索引；结构不完整时启动失败。随后通过管理端创建客户端，确认受信代理配置后，再将 `BLOG_EXTERNAL_API_ENABLED` 改为 `true` 并重新部署。关闭公开 API 时保留 `BLOG_EXTERNAL_API_SCHEMA_READY=true`，让审计与幂等清理任务继续运行。允许的 scope 固定为：
 
 - `blog.article.create`
 - `blog.article.read.own`

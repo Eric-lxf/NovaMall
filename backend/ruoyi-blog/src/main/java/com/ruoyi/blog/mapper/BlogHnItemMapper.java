@@ -18,7 +18,7 @@ public interface BlogHnItemMapper extends BaseMapper<BlogHnItem>
     @Select("""
             <script>
             SELECT i.id, i.hn_id, i.title_en, i.title_zh, i.summary_zh, i.score, i.author,
-                   i.comment_count, i.hn_time, i.translate_status, i.status, r.`rank` AS rank
+                   i.comment_count, i.hn_time, i.translate_status, i.status, r.`rank` AS `rank`
             FROM blog_hn_rank r
             INNER JOIN blog_hn_item i ON i.hn_id = r.hn_id
             WHERE r.board = #{board} AND r.snapshot_at = #{snapshotAt}
@@ -37,7 +37,7 @@ public interface BlogHnItemMapper extends BaseMapper<BlogHnItem>
 
     @Select("""
             SELECT i.hn_id, i.title_en, i.title_zh, i.summary_zh, i.url, i.hn_url, i.score, i.author,
-                   i.comment_count, i.hn_time, r.`rank` AS rank
+                   i.comment_count, i.hn_time, r.`rank` AS `rank`
             FROM blog_hn_rank r
             INNER JOIN blog_hn_item i ON i.hn_id = r.hn_id
             WHERE r.board = #{board} AND r.snapshot_at = #{snapshotAt}

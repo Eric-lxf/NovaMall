@@ -53,6 +53,7 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: true
+          provenance: false
           tags: |
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.BACKEND_IMAGE_NAME }}:latest
@@ -112,6 +113,7 @@ jobs:
           context: .
           file: frontend/Dockerfile.release
           push: true
+          provenance: false
           no-cache: true
           tags: |
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}

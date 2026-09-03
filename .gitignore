@@ -29,3 +29,9 @@ backend/doc
 
 frontend/bin
 frontend/.github
+
+# Reproducible exam QA artifacts and isolated test dependencies (not user documents)
+/tmp/exam-mvp-qa/
+/tmp/exam-worker-deps/
+/tmp/exam-p0/
+/tmp/exam-docker-qa/

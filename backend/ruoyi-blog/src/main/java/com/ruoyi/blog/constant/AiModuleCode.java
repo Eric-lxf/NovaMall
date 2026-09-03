@@ -11,9 +11,11 @@ public final class AiModuleCode
     public static final String BILL_VISION = "bill_vision";
     public static final String BILL_ADVICE = "bill_advice";
     public static final String HISTORY_EXTRACT = "history_extract";
+    public static final String EXAM_GENERATE = "exam_generate";
+    public static final String EXAM_VERIFY = "exam_verify";
 
     private static final List<String> ALL = List.of(
-            EDITOR, WRITE, OPTIMIZE, COMMENT_MODERATE, BILL_VISION, BILL_ADVICE, HISTORY_EXTRACT);
+            EDITOR, WRITE, OPTIMIZE, COMMENT_MODERATE, BILL_VISION, BILL_ADVICE, HISTORY_EXTRACT, EXAM_GENERATE, EXAM_VERIFY);
 
     private AiModuleCode()
     {

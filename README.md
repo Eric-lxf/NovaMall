@@ -11,6 +11,15 @@ NovaMall 管理平台：完整系统管理、博客与 AI、微信公众号运�
 - **frontend**：Vue3 + Element Plus，含管理后台、公开博客 `/blog`、公开商城 `/mall`、公开历史学习站 `/history`
 - **数据**：MySQL `nova_mall` + Redis（Token）
 
+## 产品方案与调研
+
+- [AI 智能命题与考试系统：产品方案及可行性分析](docs/ai-exam-product-feasibility.md)（已确认的产品方案；实现状态见最新验证记录）
+- [AI 智能命题与考试系统开发计划](docs/ai-exam-development-plan.md)（核心闭环候选已实现；发布门禁未全部通过）
+- [智能命题最新开发与验证记录](docs/ai-exam-mvp-progress.md) · [运行与验收手册](docs/ai-exam-runbook.md)（默认关闭，未部署/未调用真实模型）
+- [命题 Docker / MySQL / JWT 联调](docs/ai-exam-docker-validation.md)（58 项真实接口检查、浏览器写入及中文 DOCX/PDF 分页检查通过）
+- [智能命题 P0 技术验证记录](docs/ai-exam-p0-validation.md)（33 项离线测试通过；含详细设计、验收入口及未完成项）
+- [智能命题 P1 开发进展与启用说明](docs/ai-exam-p1-progress.md)（任务中心、默认关闭；36 项后端和 5 项前端测试通过）
+
 ## 本地开发
 
 ### 1. 初始化数据库

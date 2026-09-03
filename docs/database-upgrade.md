@@ -26,6 +26,14 @@ MySQL 官方镜像只会在数据目录为空时执行这些文件。已有 `mys
 
 ## 存量数据库手工升级
 
+### 智能命题（可选，默认关闭）
+
+串行顺序：`sql/exam_schema.sql`（任务）→ `sql/exam_workflow_schema.sql`（19 个业务/关联表）→ `sql/exam_menu_seed.sql` → `sql/exam_workflow_menu_seed.sql`。四份脚本已在隔离 MySQL 8 执行和复跑通过，见 [Docker 联调记录](ai-exam-docker-validation.md)；未在生产库执行，也未加入 Compose 自动初始化清单。实际升级前仍须备份并核对存量库差异。菜单使用自增 ID，不自动授予普通角色权限，路径冲突需人工处理。`IF NOT EXISTS` 不修复同名旧表列/索引差异，须另行核对。
+
+配置、测试结果、启用和关闭方式见 [智能命题验证记录](ai-exam-mvp-progress.md) 和 [运行手册](ai-exam-runbook.md)。未迁移/未验收时保持 `EXAM_ENABLED=false`；回退保留表和记录，不删除数据。
+
+### 通用备份要求
+
 升级前先备份，并在维护窗口执行：
 
 ```bash

@@ -13,6 +13,14 @@ ruoyi:
   # 验证码类型 math 数字计算 char 字符验证
   captchaType: math
 
+# 智能命题：完成迁移后显式启用；AI 调用及隔离文档工作进程分别配置。
+exam:
+  enabled: ${EXAM_ENABLED:false}
+  worker-enabled: ${EXAM_WORKER_ENABLED:true}
+  private-root: ${EXAM_PRIVATE_ROOT:}
+  ai-enabled: ${EXAM_AI_ENABLED:false}
+  document-image: ${EXAM_DOCUMENT_IMAGE:}
+
 # 开发环境配置
 server:
   # 服务器的HTTP端口，默认为8080

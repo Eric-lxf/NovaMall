@@ -2,19 +2,32 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { examGet, examWrite } from '@/api/exam/workflow'
-import { newRequestKey } from '../task/task-state'
+import { newRequestKey, errorLabel } from '../task/task-state'
+import AiModelSummary from './AiModelSummary.vue'
 const props = defineProps({ operation: String, payload: Object, count: { type: Number, default: 1 } })
 const emit = defineEmits(['submitted'])
 const config = ref(null), consent = ref(false), busy = ref(false), key = ref(newRequestKey())
 const pendingRequest = ref(null)
+const preview = ref(null), loadError = ref('')
 const maxCalls = ref(Math.min(150, Math.max(3, props.count * 3))), maxTokens = ref(Math.min(2000000, Math.max(60000, props.count * 60000)))
-const ready = computed(() => config.value?.ready && consent.value)
-onMounted(async () => { try { config.value = (await examGet('ai/capabilities')).data } catch {} })
+const ready = computed(() => config.value?.ready && preview.value && consent.value && !busy.value)
+onMounted(async () => {
+  try {
+    config.value = (await examGet('ai/capabilities')).data
+    if (!config.value?.ready) return
+    preview.value = (await examWrite('ai/preview', { operation: props.operation, payload: props.payload })).data
+    config.value = preview.value
+    maxCalls.value = preview.value.recommendedCalls
+    maxTokens.value = preview.value.recommendedTokens
+  } catch (error) { loadError.value = error.message || '读取调用计划失败，请关闭窗口后重试' }
+})
 async function submit() {
+  if (!ready.value) return
   busy.value = true
   try {
     pendingRequest.value ||= { ...JSON.parse(JSON.stringify(props.payload)), externalConsent: true, maxCalls: maxCalls.value, maxTokens: maxTokens.value,
-      generationFingerprint: config.value.generation.configFingerprint, verificationFingerprint: config.value.verification.configFingerprint }
+      generationFingerprint: config.value.generation.configFingerprint, verificationFingerprint: config.value.verification.configFingerprint,
+      planFingerprint: preview.value.planFingerprint }
     const result = await examWrite(`ai/${props.operation}`, pendingRequest.value, 'post', key.value)
     ElMessage.success(`任务 ${result.data.id} 已排队，可在任务中心查看进度`); emit('submitted', result.data)
   } catch { /* Preserve the same key across an uncertain enqueue response. */ } finally { busy.value = false }
@@ -23,11 +36,10 @@ async function submit() {
 <template>
   <div>
     <el-alert title="真实 AI 调用可能产生费用；只发送已授权的选定资料" type="warning" :closable="false" />
-    <el-descriptions v-if="config?.ready" :column="1" border class="models">
-      <el-descriptions-item label="生成服务">{{ config.generation.providerName }} / {{ config.generation.model }}<br>{{ config.generation.baseUrl }}</el-descriptions-item>
-      <el-descriptions-item label="独立复核">{{ config.verification.providerName }} / {{ config.verification.model }}<br>{{ config.verification.baseUrl }}</el-descriptions-item>
-    </el-descriptions>
-    <el-alert v-else title="命题 AI 未启用或模块模型尚未配置，请联系管理员。" type="info" :closable="false" class="models" />
+    <AiModelSummary v-if="config?.ready" :config="config" :operation="operation" class="models" />
+    <el-alert v-else :title="config?.errorCode ? errorLabel(config.errorCode) : '正在读取命题 AI 配置…'" type="info" :closable="false" class="models" />
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" class="models" />
+    <p v-if="preview">本次 {{ preview.itemCount }} 个{{ operation === 'extract' ? '资料批次' : '子任务' }}。已按实际计划填写建议预算，可在提交前调整；预算不足时会停止，不会自动追加调用。</p>
     <el-form label-position="top" class="models">
       <el-form-item label="本次最多调用次数（每题通常含生成、独立解题、解析/评分复核共 3 次）"><el-input-number v-model="maxCalls" :min="1" :max="150" :disabled="!!pendingRequest" /></el-form-item>
       <el-form-item label="Token 预留上限（含输入和最大输出，不是货币金额）"><el-input-number v-model="maxTokens" :min="4096" :max="2000000" :step="10000" :disabled="!!pendingRequest" /></el-form-item>

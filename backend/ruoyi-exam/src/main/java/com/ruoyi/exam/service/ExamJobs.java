@@ -45,6 +45,8 @@ public class ExamJobs {
         var job=db.one("select * from exam_job where task_id=?",id);
         result.put("callsReserved",number(job,"calls_reserved")).put("tokensReserved",number(job,"tokens_reserved"));
         result.set("result",ExamJson.parse(string(job,"result_json"))); result.set("progress",ExamJson.parse(string(job,"progress_json")));
+        var input=ExamJson.parse(string(job,"input_json"));
+        if(input.has("retryOfTaskId")) result.put("retryOfTaskId",input.path("retryOfTaskId").asText());
         var items=result.putArray("items"); db.rows("select * from exam_task_item where task_id=? order by id",id).forEach(row->items.add(ExamJson.object()
                 .put("slotId",string(row,"slot_id")).put("status",string(row,"status")).put("questionVersionId",string(row,"result_version_id")).put("errorCode",string(row,"error_code"))));
         var calls=result.putArray("calls"); db.rows("select * from exam_ai_call where task_id=? order by call_no",id).forEach(row->{

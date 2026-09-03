@@ -16,6 +16,17 @@ public class ExamAiController {
     public ExamAiController(ExamAiJobs ai,ExamJobs jobs,ExamWorkflow workflow) { this.ai=ai; this.jobs=jobs; this.workflow=workflow; }
     @GetMapping("/ai/capabilities") @PreAuthorize("@ss.hasPermi('exam:task:list')")
     public AjaxResult capabilities() { return AjaxResult.success(ai.capabilities()); }
+    @PostMapping("/ai/preview") @PreAuthorize("@ss.hasPermi('exam:task:list')")
+    public AjaxResult preview(@RequestBody JsonNode body) {
+        workflow.requireReady();
+        String kind=switch(body.path("operation").asText()) {
+            case "extract" -> ExamAiJobs.KNOWLEDGE;
+            case "generate" -> ExamAiJobs.GENERATE;
+            case "verify" -> ExamAiJobs.VERIFY;
+            default -> throw new com.ruoyi.exam.support.ExamException("EXAM_INPUT_INVALID","AI 操作无效");
+        };
+        return AjaxResult.success(ai.preview(ExamActor.current(),kind,body.path("payload")));
+    }
     @GetMapping("/jobs/{id}") @PreAuthorize("@ss.hasPermi('exam:task:list')")
     public AjaxResult detail(@PathVariable long id) { workflow.requireReady(); return AjaxResult.success(jobs.detail(ExamActor.current(),id)); }
     @PostMapping("/ai/generate") @PreAuthorize("@ss.hasPermi('exam:question:generate')")

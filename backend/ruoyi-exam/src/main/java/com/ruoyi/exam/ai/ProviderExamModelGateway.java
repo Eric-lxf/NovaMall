@@ -30,15 +30,26 @@ public class ProviderExamModelGateway implements ExamModelGateway {
         var p=config.getProvider();
         var identity=ExamJson.object().put("providerId",Long.toString(p.getId())).put("providerName",p.getName()).put("model",config.getTextModel())
                 .put("baseUrl",p.getBaseUrl()).put("temperature",String.valueOf(config.getTemperatureOverride()));
+        identity.set("callPolicies",ExamAiCallOptions.policies(properties));
+        identity.put("thinkingSupported",isDeepSeekV4(config));
         // Credentials stay in the provider service and are never persisted in a task payload.
         identity.put("configFingerprint",ExamJson.hash((identity.toString()+p.getApiKey()).getBytes(StandardCharsets.UTF_8))); return identity;
     }
-    public Result complete(String module,JsonNode expected,String system,JsonNode input,int maxOutputTokens) {
+    private boolean isDeepSeekV4(AiResolvedModelConfig config) {
+        return "api.deepseek.com".equals(HttpUrl.parse(config.getProvider().getBaseUrl()).host()) && config.getTextModel().startsWith("deepseek-v4-");
+    }
+    public Result complete(String module,JsonNode expected,String system,JsonNode input,ExamAiCallOptions options) {
         var config=resolve(module); ExamJson.require(describe(config).equals(expected),"模型配置发生变化，请重新确认任务");
         var p=config.getProvider(); var body=ExamJson.object().put("model",config.getTextModel()).put("stream",false);
         String base=p.getBaseUrl().replaceAll("/+$","");
-        body.put(HttpUrl.parse(base).host().equals("api.openai.com")?"max_completion_tokens":"max_tokens",maxOutputTokens);
-        if(config.getTemperatureOverride()!=null) body.put("temperature",config.getTemperatureOverride());
+        body.put(HttpUrl.parse(base).host().equals("api.openai.com")?"max_completion_tokens":"max_tokens",options.maxOutputTokens());
+        boolean deepSeek=isDeepSeekV4(config);
+        if(deepSeek) {
+            body.putObject("thinking").put("type",options.thinking());
+            if("enabled".equals(options.thinking())) body.put("reasoning_effort",options.reasoningEffort());
+            body.putObject("response_format").put("type","json_object");
+        }
+        if(config.getTemperatureOverride()!=null && !(deepSeek && "enabled".equals(options.thinking()))) body.put("temperature",config.getTemperatureOverride());
         body.putArray("messages").add(ExamJson.object().put("role","system").put("content",system))
                 .add(ExamJson.object().put("role","user").put("content",input.toString()));
         ExamJson.require(body.toString().getBytes(StandardCharsets.UTF_8).length<=80000,"模型输入超出单次 80 KB 限制，请减少依据范围");

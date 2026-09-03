@@ -2,8 +2,9 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { cancelExamTask, createExamCheck, getExamCapabilities, getExamTask, listExamTasks, retryExamTask } from '@/api/exam/task'
-import { canCancelTask, canRetryTask, newRequestKey, pollDelay, taskLabels } from './task-state'
+import { canCancelTask, canRetryTask, newRequestKey, pollDelay, taskLabels, errorLabel, callStatusLabel, finishReasonLabel } from './task-state'
 import { examGet } from '@/api/exam/workflow'
+import RetryTaskDialog from './RetryTaskDialog.vue'
 
 defineOptions({ name: 'ExamTask' })
 const capabilities = ref({ enabled: false, taskReady: false })
@@ -18,6 +19,8 @@ const detail = ref(null)
 const jobDetail = ref(null)
 const detailOpen = ref(false)
 const pendingKey = ref(null)
+const retryTarget = ref(null)
+const retryOpen = ref(false)
 const query = reactive({ pageNum: 1, pageSize: 10, status: undefined })
 let active = false
 let timer = null
@@ -94,11 +97,17 @@ async function showDetail(row) {
 }
 
 async function changeTask(row, action) {
+  if (action === 'retry' && row.kind !== 'SYSTEM_CHECK') { retryTarget.value = { ...row }; retryOpen.value = true; return }
   try {
     await ElMessageBox.confirm(action === 'cancel' ? '确认取消该任务？' : '确认重试该基础自检？总运行次数最多三次。', '任务操作')
     await (action === 'cancel' ? cancelExamTask(row.id, row.revision) : retryExamTask(row.id, row.revision))
     await loadList()
   } catch { /* Cancellation and stale-version errors do not trigger automatic retries. */ }
+}
+async function retried() {
+  retryOpen.value = false; detailOpen.value = false
+  query.pageNum = 1; query.status = undefined
+  await loadList()
 }
 
 function activate() {
@@ -169,16 +178,22 @@ onBeforeUnmount(() => { deactivate(); document.removeEventListener('visibilitych
         <el-descriptions-item label="状态">{{ taskLabels[detail.status] || detail.status }}</el-descriptions-item>
         <el-descriptions-item label="运行次数">{{ detail.attemptNo }}</el-descriptions-item>
         <el-descriptions-item label="结果">{{ detail.resultSummary || '尚无结果' }}</el-descriptions-item>
-        <el-descriptions-item label="错误码">{{ detail.errorCode || '无' }}</el-descriptions-item>
+        <el-descriptions-item label="失败说明">{{ errorLabel(detail.errorCode) }}<span v-if="detail.errorCode">（{{ detail.errorCode }}）</span></el-descriptions-item>
       </el-descriptions>
       <template v-if="jobDetail">
         <p>调用预留 {{ jobDetail.callsReserved }} 次 / token 预留 {{ jobDetail.tokensReserved }}。供应商未返回 usage 时不显示为零用量。</p>
         <p v-if="jobDetail.result.sourceId">已导入资料 ID：{{ jobDetail.result.sourceId }}，请到资料库核对。</p>
-        <p v-if="jobDetail.result.knowledgeIds">已创建知识点 ID：{{ jobDetail.result.knowledgeIds.join('、') }}，请到知识点页确认。</p>
-        <el-table :data="jobDetail.items"><el-table-column prop="slotId" label="子任务 / 槽位" /><el-table-column prop="status" label="状态" /><el-table-column prop="questionVersionId" label="结果题目版本" /><el-table-column prop="errorCode" label="错误码" min-width="200" /></el-table>
-        <p>部分失败时，仅在蓝图中选失败槽位重新确认预算并提交；已成功槽位不要重复生成。</p>
-        <el-table :data="jobDetail.calls"><el-table-column prop="callNo" label="调用" width="65" /><el-table-column prop="model" label="模型" min-width="140" /><el-table-column prop="status" label="状态" /><el-table-column prop="finishReason" label="结束原因" /><el-table-column label="供应商 usage" min-width="170"><template #default="{ row }">{{ Object.keys(row.usage).length ? JSON.stringify(row.usage) : '未返回 / 尚未知' }}</template></el-table-column><el-table-column prop="requestId" label="请求 ID" min-width="180" show-overflow-tooltip /></el-table>
+        <p v-if="jobDetail.result.knowledgeIds?.length">已创建知识点 ID：{{ jobDetail.result.knowledgeIds.join('、') }}，请到知识点页确认。</p>
+        <p v-if="jobDetail.retryOfTaskId">重试来源：任务 {{ jobDetail.retryOfTaskId }}，原任务审计与结果保持不变。</p>
+        <p v-if="jobDetail.progress.retryTaskId">已创建后继重试任务：<el-button link type="primary" @click="showDetail({ id: jobDetail.progress.retryTaskId, kind: detail.kind })">{{ jobDetail.progress.retryTaskId }}</el-button></p>
+        <el-table :data="jobDetail.items"><el-table-column prop="slotId" label="子任务 / 槽位" /><el-table-column label="状态"><template #default="{ row }">{{ taskLabels[row.status] || row.status }}</template></el-table-column><el-table-column prop="questionVersionId" label="结果题目版本" /><el-table-column label="失败说明" min-width="240"><template #default="{ row }">{{ errorLabel(row.errorCode) }}<br><small v-if="row.errorCode">{{ row.errorCode }}</small></template></el-table-column></el-table>
+        <p>手动重试只处理未完成项；成功结果保留。AI 重试需要重新确认模型、资料授权和预算。</p>
+        <el-table :data="jobDetail.calls"><el-table-column prop="callNo" label="调用" width="65" /><el-table-column prop="model" label="模型" min-width="140" /><el-table-column label="状态"><template #default="{ row }">{{ callStatusLabel(row.status) }}</template></el-table-column><el-table-column label="结束原因"><template #default="{ row }">{{ finishReasonLabel(row.finishReason) }}</template></el-table-column><el-table-column label="供应商 usage" min-width="170"><template #default="{ row }">{{ Object.keys(row.usage).length ? JSON.stringify(row.usage) : '未返回 / 尚未知' }}</template></el-table-column><el-table-column prop="requestId" label="请求 ID" min-width="180" show-overflow-tooltip /></el-table>
       </template>
+      <template #footer><el-button @click="detailOpen = false">关闭</el-button><el-button v-if="detail && canRetryTask(detail) && !jobDetail?.progress?.retryTaskId" v-hasPermi="['exam:task:retry']" type="primary" @click="changeTask(detail, 'retry')">手动重试未完成项</el-button></template>
+    </el-dialog>
+    <el-dialog v-model="retryOpen" title="手动重试任务" width="min(850px, 94vw)" append-to-body destroy-on-close :close-on-click-modal="false">
+      <RetryTaskDialog v-if="retryOpen && retryTarget" :key="retryTarget.id" :task="retryTarget" @submitted="retried" />
     </el-dialog>
   </div>
 </template>

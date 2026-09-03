@@ -26,6 +26,9 @@ public class ExamAiJobs implements ExamJobHandler {
     private static final String SOLVE=BOUNDARY+"不参考出题者答案，独立解答 question。返回 {supported:boolean,ambiguous:boolean,reason:string,answer:object}。"
             +"answer 按题型包含 correctOptionIds（字符串数组）或 answerBoolean（布尔值）或 referenceAnswer（文本）。"
             +"有两个合理答案或资料不足时 ambiguous=true 或 supported=false，不要猜测。";
+    private static final String EXTRACTION=BOUNDARY+"抽取本批资料最多8个重要知识点，返回 {points:[{name,description,sourceRefs:[{fragmentId,quote}]}]}。"
+            +"描述简明，每个知识点最多2条短引用，引用必须逐字匹配，只可引用本批片段。";
+    private static final int KNOWLEDGE_BATCH_CHARS=4000, KNOWLEDGE_BATCH_FRAGMENTS=8;
     private final ExamDataStore db; private final ExamJobs jobs; private final ExamModelGateway gateway; private final ExamExecutionAuthorizer authorizer;
     private final ExamSources sources; private final ExamKnowledge knowledge; private final ExamBlueprints blueprints; private final ExamQuestions questions;
     public ExamAiJobs(ExamDataStore db,ExamJobs jobs,ExamModelGateway gateway,ExamExecutionAuthorizer authorizer,
@@ -40,24 +43,48 @@ public class ExamAiJobs implements ExamJobHandler {
     }
     public ExamTask submit(ExamActor actor,String kind,String key,JsonNode request) {
         ExamJson.require(supports(kind),"不支持的 AI 任务"); var old=jobs.existing(actor,kind,key,request); if(old!=null) return old;
+        return enqueue(actor,key,request,prepare(actor,kind,request,null));
+    }
+    public ExamTask enqueue(ExamActor actor,String key,JsonNode request,Prepared prepared) {
         ExamJson.require(request.path("externalConsent").isBoolean() && request.path("externalConsent").asBoolean(),"请明确同意向所显示的模型服务发送选定资料");
+        ExamJson.require(request.path("maxCalls").isIntegralNumber() && request.path("maxTokens").isIntegralNumber(),"调用预算须为整数");
         int maxCalls=request.path("maxCalls").asInt(0); long maxTokens=request.path("maxTokens").asLong(0);
         ExamJson.require(maxCalls>=1 && maxCalls<=150 && maxTokens>=4096 && maxTokens<=2000000,"调用预算须为 1–150 次、4096–2000000 token 预留上限");
-        var input=ExamJson.object().put("kind",kind).put("maxCalls",maxCalls).put("maxTokens",maxTokens).put("promptVersion","exam-prompts.v1");
-        input.set("generation",gateway.describe(GENERATION_MODULE)); input.set("verification",gateway.describe(VERIFY_MODULE));
+        var input=prepared.input().deepCopy().put("maxCalls",maxCalls).put("maxTokens",maxTokens);
         // A stale confirmation must not silently select a newly changed provider/model.
         ExamJson.require(request.path("generationFingerprint").asText().equals(input.path("generation").path("configFingerprint").asText())
                 && request.path("verificationFingerprint").asText().equals(input.path("verification").path("configFingerprint").asText()),"模型配置已变化，请刷新并重新确认");
+        if(request.has("planFingerprint")) ExamJson.require(prepared.fingerprint().equals(request.path("planFingerprint").asText()),"资料或调用计划已变化，请刷新并重新确认");
+        if(request.has("retryOfTaskId")) input.put("retryOfTaskId",request.path("retryOfTaskId").asText());
+        return jobs.submit(actor,input.path("kind").asText(),prepared.title(),key,request,input,prepared.slots());
+    }
+    public ObjectNode preview(ExamActor actor,String kind,JsonNode request) { return prepare(actor,kind,request,null).preview(); }
+    public record Prepared(ObjectNode input,List<String> slots,String title,int recommendedCalls,long recommendedTokens) {
+        public String fingerprint() { return ExamJson.hash(input); }
+        public ObjectNode preview() {
+            var result=ExamJson.object().put("ready",true).put("ai",true).put("itemCount",slots.size()).put("planFingerprint",fingerprint())
+                    .put("recommendedCalls",recommendedCalls).put("recommendedTokens",recommendedTokens);
+            result.set("generation",input.path("generation")); result.set("verification",input.path("verification"));
+            return result;
+        }
+    }
+    private Prepared prepare(ExamActor actor,String kind,JsonNode request,Set<String> retryFragments) {
+        ExamJson.require(supports(kind),"不支持的 AI 任务");
+        if(!authorizer.mayExecute(actor.userId(),permission(kind))) throw new ExamException("EXAM_PERMISSION_REVOKED","没有执行该类任务的权限");
+        var input=ExamJson.object().put("kind",kind).put("promptVersion","exam-prompts.v2");
+        input.set("generation",gateway.describe(GENERATION_MODULE)); input.set("verification",gateway.describe(VERIFY_MODULE));
         var versions=new TreeSet<Long>(); var slotIds=new ArrayList<String>(); String title;
         if(KNOWLEDGE.equals(kind)) {
             long versionId=ExamJson.id(request,"sourceVersionId"); sources.version(actor,versionId,true); versions.add(versionId);
             input.put("sourceVersionId",Long.toString(versionId)); title="知识点抽取";
             var batches=input.putArray("batches"); var batch=ExamJson.array(); int length=0;
-            for(var fragment:sources.fragments(actor,versionId)) if(fragment.path("usable").asBoolean()) {
+            var included=new HashSet<String>();
+            for(var fragment:sources.fragments(actor,versionId)) if(fragment.path("usable").asBoolean() && (retryFragments==null || retryFragments.contains(fragment.path("id").asText()))) {
                 int size=fragment.path("text").asText().length();
-                if(length+size>16000 && !batch.isEmpty()) { batches.add(batch); batch=ExamJson.array(); length=0; }
-                batch.add(fragment.path("id").asText()); length+=size;
+                if((length+size>KNOWLEDGE_BATCH_CHARS || batch.size()>=KNOWLEDGE_BATCH_FRAGMENTS) && !batch.isEmpty()) { batches.add(batch); batch=ExamJson.array(); length=0; }
+                batch.add(fragment.path("id").asText()); included.add(fragment.path("id").asText()); length+=size;
             }
+            ExamJson.require(retryFragments==null || included.equals(retryFragments),"待重试资料片段已停用或不可用，请重新确认资料");
             if(!batch.isEmpty()) batches.add(batch); ExamJson.require(!batches.isEmpty(),"没有可用片段");
             for(int i=0;i<batches.size();i++) slotIds.add("knowledge-"+(i+1));
         } else if(GENERATE.equals(kind)) {
@@ -85,7 +112,32 @@ public class ExamAiJobs implements ExamJobHandler {
             pins.add(ExamJson.object().put("versionId",Long.toString(versionId)).put("sourceId",Long.toString(number(version,"source_id"))).put("revision",number(version,"revision")));
         }
         ExamJson.require(title.length()<=200,"任务标题过长");
-        return jobs.submit(actor,kind,title,key,request,input,slotIds);
+        long tokens=0; int calls;
+        if(KNOWLEDGE.equals(kind)) {
+            var options=ExamAiCallOptions.read(input.path("generation"),"extract");
+            for(var batch:input.path("batches")) tokens+=reservation(EXTRACTION,ExamJson.object().set("evidence",evidence(actor,batch)),options);
+            calls=slotIds.size();
+        } else {
+            calls=GENERATE.equals(kind)?slotIds.size()*4:2;
+            // 题目正文尚未生成，展示保守建议；执行前仍按每次真实请求重新预留并检查总预算。
+            tokens=GENERATE.equals(kind)?slotIds.size()*120000L:80000L;
+        }
+        return new Prepared(input,List.copyOf(slotIds),title,Math.min(150,calls),Math.min(2000000,Math.max(60000,tokens)));
+    }
+    public Prepared prepareRetry(ExamActor actor,String kind,JsonNode original,List<String> remaining) {
+        var request=ExamJson.object(); Set<String> fragments=null;
+        if(KNOWLEDGE.equals(kind)) {
+            request.put("sourceVersionId",original.path("sourceVersionId").asText()); fragments=new LinkedHashSet<>();
+            int index=0; for(var batch:original.path("batches")) {
+                if(remaining.contains("knowledge-"+(++index))) for(var fragment:batch) fragments.add(fragment.asText());
+            }
+            ExamJson.require(!fragments.isEmpty(),"没有可重试的资料批次");
+        } else if(GENERATE.equals(kind)) {
+            long blueprintId=ExamJson.id(original,"blueprintId");
+            ExamJson.require(blueprints.detail(actor,blueprintId).path("contentHash").asText().equals(original.path("blueprintHash").asText()),"原蓝图已变更，请从蓝图重新选择槽位");
+            request.put("blueprintId",Long.toString(blueprintId)); var slots=request.putArray("slotIds"); remaining.forEach(slots::add);
+        } else request.put("questionVersionId",original.path("questionVersionId").asText());
+        return prepare(actor,kind,request,fragments);
     }
     public boolean supports(String kind) { return Set.of(GENERATE,KNOWLEDGE,VERIFY).contains(kind); }
     private String permission(String kind) { return KNOWLEDGE.equals(kind)?"exam:knowledge:extract":GENERATE.equals(kind)?"exam:question:generate":"exam:question:verify"; }
@@ -162,7 +214,9 @@ public class ExamAiJobs implements ExamJobHandler {
     }
     private String callText(ExamTask task,JsonNode input,ExamJobs.Lease lease,String module,String system,JsonNode payload) {
         JsonNode expected=input.path(module.equals(GENERATION_MODULE)?"generation":"verification");
-        int reserve=system.getBytes(StandardCharsets.UTF_8).length+payload.toString().getBytes(StandardCharsets.UTF_8).length+4096+1024;
+        String operation=VERIFY_MODULE.equals(module)?"verify":KNOWLEDGE.equals(task.kind())?"extract":"generate";
+        var options=ExamAiCallOptions.read(expected,operation);
+        int reserve=reservation(system,payload,options);
         long callId=lease.commit(()->{
             authorize(task,input);
             if(!gateway.describe(module).equals(expected)) throw new ExamException("EXAM_SOURCE_AUTH_CHANGED","模型服务配置已变化，请重新确认");
@@ -179,16 +233,20 @@ public class ExamAiJobs implements ExamJobHandler {
                     "status","DISPATCHING","usage_json","{}","created_at",db.now()));
         });
         ExamModelGateway.Result response;
-        try { lease.check(); response=gateway.complete(module,expected,system,payload,4096); }
+        try { lease.check(); response=gateway.complete(module,expected,system,payload,options); }
         catch(ExamException error) {
             lease.commit(()->{ db.update("update exam_ai_call set status=?,error_code=? where id=?",stop(error)?"UNCERTAIN":"FAILED",error.getErrorCode(),callId); return null; }); throw error;
         }
         lease.commit(()->{
             db.update("update exam_ai_call set status='RESPONDED',usage_json=?,request_id=?,finish_reason=?,duration_ms=? where id=?",response.usage().toString(),limit(response.requestId(),200),limit(response.finishReason(),80),response.durationMs(),callId); return null;
         });
-        if(!"stop".equals(response.finishReason())) throw new ExamException("EXAM_OUTPUT_TRUNCATED","模型未正常结束，结果不入库");
+        if("length".equals(response.finishReason())) throw new ExamException("EXAM_OUTPUT_TRUNCATED","模型输出达到上限，未保存不完整结果；请缩小资料范围或调整输出/思考预算后手动重试");
+        if(!"stop".equals(response.finishReason())) throw new ExamException("EXAM_MODEL_INCOMPLETE","模型未正常结束，结果不入库");
         ExamJson.require(response.text()!=null && response.text().length()<=128000,"模型输出过长");
         return response.text();
+    }
+    private static int reservation(String system,JsonNode payload,ExamAiCallOptions options) {
+        return system.getBytes(StandardCharsets.UTF_8).length+payload.toString().getBytes(StandardCharsets.UTF_8).length+options.maxOutputTokens()+1024;
     }
     private ObjectNode verify(ExamTask task,JsonNode input,ExamJobs.Lease lease,JsonNode question,JsonNode evidence) {
         var visible=ExamJson.object().put("type",question.path("type").asText()).put("stem",question.path("stem").asText());
@@ -218,7 +276,7 @@ public class ExamAiJobs implements ExamJobHandler {
             String slotId="knowledge-"+(++index);
             try {
                 var payload=ExamJson.object(); payload.set("evidence",evidence(actor,ids));
-                var result=call(task,input,lease,GENERATION_MODULE,BOUNDARY+"抽取本批资料最多20个重要知识点，返回 {points:[{name,description,sourceRefs:[{fragmentId,quote}]}]}。引用必须逐字匹配，只可引用本批片段。",payload);
+                var result=call(task,input,lease,GENERATION_MODULE,EXTRACTION,payload);
                 ExamJson.fields(result,Set.of("points"),Set.of()); var points=ExamJson.list(result.get("points"),1,20,"知识点");
                 var batchSaved=lease.commit(()->{
                     authorize(task,input); var names=ExamJson.array(); var allowed=set(ids);

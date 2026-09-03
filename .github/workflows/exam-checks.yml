@@ -14,6 +14,10 @@ on:
       - 'frontend/package*.json'
       - 'sql/exam_*.sql'
       - 'tools/exam-document-worker/**'
+      - 'scripts/exam-local/**'
+      - 'docker-compose*.yml'
+      - '.env.example'
+      - '.github/workflows/deploy-ecs.yml'
       - '.github/workflows/exam-checks.yml'
 
 permissions:
@@ -24,6 +28,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deployment-config-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compose rendering and deployment guard tests (no deployment)
+        run: python -m unittest discover -s scripts/exam-local -p test_deploy_config.py -v
+
   document-worker-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 5

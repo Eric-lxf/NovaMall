@@ -21,8 +21,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y wget \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /data/uploads /home/ruoyi/logs \
-    && chown -R app:app /data/uploads /home/ruoyi/logs /app \
+    && mkdir -p /data/uploads /data/exam-private /home/ruoyi/logs \
+    && chown -R app:app /data/uploads /data/exam-private /home/ruoyi/logs /app \
+    && chmod 0700 /data/exam-private \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/ruoyi-admin/target/ruoyi-admin.jar app.jar
 USER app

@@ -15,6 +15,13 @@ services:
       BLOG_EXTERNAL_API_ENABLED: ${BLOG_EXTERNAL_API_ENABLED:-false}
       BLOG_EXTERNAL_API_SCHEMA_READY: ${BLOG_EXTERNAL_API_SCHEMA_READY:-false}
 
+      # 命题开关来自部署流水线；真实模型调用独立控制，默认不外发资料。
+      EXAM_ENABLED: ${EXAM_ENABLED:-false}
+      EXAM_WORKER_ENABLED: ${EXAM_WORKER_ENABLED:-true}
+      EXAM_AI_ENABLED: ${EXAM_AI_ENABLED:-false}
+      # 固定使用独立命名卷，不得指向公开上传目录。
+      EXAM_PRIVATE_ROOT: /data/exam-private
+
       MYSQL_HOST: ${MYSQL_HOST}
       MYSQL_PORT: ${MYSQL_PORT}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -35,6 +42,7 @@ services:
       RUOYI_PROFILE: /data/uploads
     volumes:
       - uploads_data:/data/uploads
+      - exam_private_data:/data/exam-private
       - ${RUOYI_LOG_PATH}:/home/ruoyi/logs
     ports:
       - "127.0.0.1:${BACKEND_PORT}:8080"
@@ -75,3 +83,5 @@ services:
 
 volumes:
   uploads_data:
+  # 仅后端挂载；升级和关闭功能时保留，禁止使用 down -v 清除业务资料。
+  exam_private_data:

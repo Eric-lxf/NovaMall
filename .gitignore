@@ -35,3 +35,4 @@ frontend/.github
 /tmp/exam-worker-deps/
 /tmp/exam-p0/
 /tmp/exam-docker-qa/
+/scripts/exam-local/__pycache__/

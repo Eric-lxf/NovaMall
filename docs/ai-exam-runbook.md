@@ -1,6 +1,6 @@
 # 智能命题运行与验收手册
 
-版本：2026-09-03 候选版本。当前未部署；执行前阅读 [验证记录与未决门禁](ai-exam-mvp-progress.md)。本手册不是已执行操作的证明。
+版本：2026-09-03 候选版本。执行前阅读 [验证记录与未决门禁](ai-exam-mvp-progress.md)。具体环境是否已部署或启用，以对应流水线和后端能力查询为准；本手册不是已执行操作的证明。
 
 ## 1. 准备和迁移
 
@@ -27,11 +27,28 @@ DDL 使用 `CREATE TABLE IF NOT EXISTS`，**不会自动修复同名旧表的列
 | `EXAM_AI_ENABLED` | false | 是否允许模型调用；还需逐资料和逐任务授权 |
 | `EXAM_DOCUMENT_IMAGE` | 空 | 预先构建的可信文档镜像，例如 `novamall/exam-document:20260903` |
 
-直接运行 JAR 时由启动脚本传入；`.env` 不会被 Java 自动加载。现有 Compose 不会因为 `.env.example` 新增变量就自动传入后端，也不会自动安装 Docker 客户端、挂载 socket 或私有目录。不要直接给现有公网后端挂载宿主机高权限 Docker socket。
+直接运行 JAR 时由启动脚本传入；`.env` 不会被 Java 自动加载。本地与生产 Compose 显式传入 `EXAM_ENABLED`、`EXAM_WORKER_ENABLED`、`EXAM_AI_ENABLED`，私有路径固定为 `/data/exam-private`，挂载仅供后端使用的 `exam_private_data` 命名卷，与公开的 `/data/uploads` 分离。容器以非 root 的 `app` 用户运行，私有根目录权限为 `0700`；升级和关闭功能保留该卷，不执行 `docker compose down -v`。
 
-首次联调建议：后端直接运行在专用测试主机，使用专用服务账号、私有目录权限及受限/rootless Docker；容器控制权限仅给予管理员维护的命题服务，禁止暴露未认证的 Docker TCP API。若接入现有 Compose，需单独审核运行边界和最小权限，当前没有自动部署该变更。
+当前 Compose **不传入 `EXAM_DOCUMENT_IMAGE`，也不安装 Docker 客户端或挂载 socket**。仅启用基础模块时可用文本/TXT、人工审核与组卷、教师 XLSX；DOCX/PDF 解析和导出仍需单独接入经过审核的隔离运行环境。不要直接给现有公网后端挂载宿主机高权限 Docker socket。文档能力首次联调建议在专用测试主机使用专用服务账号、私有目录及受限/rootless Docker，禁止暴露未认证的 Docker TCP API。
 
 私有根不能是 `/profile`、`/uploads` 对应目录及其父子目录，也不能通过链接指向公开目录。保留现有公开文件行为；考试文件只能经过带权限的下载接口。备份必须同时包含数据库和私有文件，恢复时核对 SHA-256。
+
+### ECS / GitHub Actions 启用入口
+
+先确认包含本配置修复的代码已合并。仓库 `Settings → Secrets and variables → Actions → Variables` 中设置以下普通变量；若 `production` 环境存在同名变量，以该环境的配置为准，避免两处值冲突。
+
+| 变量 | 基础模块启用值 | 说明 |
+|---|---|---|
+| `EXAM_ENABLED` | `true` | 开启命题模块；未设置仍默认关闭 |
+| `EXAM_SCHEMA_READY` | `true` | 仅在四份 SQL 执行并核对目标库后设置；这是人工迁移确认，不是自动结构校验 |
+| `EXAM_WORKER_ENABLED` | `true` | 启用持久任务处理，也可以暂设 `false` 暂停队列 |
+| `EXAM_AI_ENABLED` | `false` | 首次上线保持关闭；基础模块启用不等于允许真实模型调用 |
+
+无需为 Compose 设置 `EXAM_PRIVATE_ROOT`，其容器路径和持久卷由编排固定。部署流水线依次将开关从 GitHub Variables 传到 SSH 会话、写入 ECS `.env`、传入后端容器；`TRUE`/`False` 等布尔值统一转为小写，其他非法值或未确认迁移时拒绝部署。它不会执行 SQL，也不会自动配置 Provider 或文档服务。
+
+修改 GitHub Variables 本身不会重启运行中的容器。需运行 **Build, Push and Deploy to ECS**，使用已合并的 `master` 版本重新部署；流水线会初始化私有卷顶层目录权限并重建后端容器。不要仅修改服务器 `.env`，该文件会被下一次部署覆盖；普通 `docker restart` 也不会更新容器环境变量。
+
+部署后重新登录，查看任务中心或浏览器已登录请求：`/exam/capabilities` 应返回 `enabled=true`、`taskReady=true`、`aiEnabled=false`，`/exam/workflow/capabilities` 应返回 `workflowReady=true`、`privateStorageReady=true`。请求需经过实际 API 代理前缀并携带正常登录认证。若只有 `enabled=true`，其他就绪项为 `false`，先核对后端实际连接的数据库、表结构和私有目录，再继续业务验收，不要重复导入整个商城初始化脚本。
 
 ## 3. 构建文档镜像
 

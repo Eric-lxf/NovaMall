@@ -102,6 +102,11 @@ services:
       MALL_PAYMENT_MOCK_ENABLED: ${MALL_PAYMENT_MOCK_ENABLED:-true}
       BLOG_EXTERNAL_API_ENABLED: ${BLOG_EXTERNAL_API_ENABLED:-false}
       BLOG_EXTERNAL_API_SCHEMA_READY: ${BLOG_EXTERNAL_API_SCHEMA_READY:-false}
+      EXAM_ENABLED: ${EXAM_ENABLED:-false}
+      EXAM_WORKER_ENABLED: ${EXAM_WORKER_ENABLED:-true}
+      EXAM_AI_ENABLED: ${EXAM_AI_ENABLED:-false}
+      # 与公开上传卷分开持久化，不给后端挂载 Docker socket。
+      EXAM_PRIVATE_ROOT: /data/exam-private
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: nova_mall
@@ -113,6 +118,7 @@ services:
       JAVA_OPTS: "-Xms256m -Xmx768m -Duser.timezone=Asia/Shanghai"
     volumes:
       - uploads_data:/data/uploads
+      - exam_private_data:/data/exam-private
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     healthcheck:
@@ -145,3 +151,4 @@ volumes:
   mysql_data:
   redis_data:
   uploads_data:
+  exam_private_data:

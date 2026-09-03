@@ -47,3 +47,7 @@ python scripts/exam-local/render_qa.py tmp/exam-docker-qa/<run-id> --renderer /a
 该适配器运行原文档技能的 `rasterize` 流程，仅把 `soffice` 命令转到 Docker；随后还单独渲染 API 下载的 PDF，检查文字和学生答案投影。须人工打开所有 PNG 验证布局，JSON 的成功结果不等于视觉验收。
 
 QA 转换器只读挂载选定合成 DOCX、写入渲染器临时输出目录。**生产工作进程仍为标准流输入输出、无任何宿主机目录挂载**，不要把 QA 挂载方式复制到上传处理链路。
+
+## 命题部署配置回归（不启动服务）
+
+从仓库根目录运行 `python -m unittest discover -s scripts/exam-local -p test_deploy_config.py -v`。需要 Python 3.11+、Docker Compose 插件和 Bash（Windows 使用 Git for Windows 的 Bash）。测试使用临时空环境文件与合成配置，不读取项目 `.env`，只渲染 Compose 和执行命题开关校验片段，不连接生产、不启动容器、不调用模型。

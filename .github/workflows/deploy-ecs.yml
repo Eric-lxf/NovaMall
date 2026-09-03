@@ -196,6 +196,11 @@ jobs:
           BLOG_EXTERNAL_API_SCHEMA_READY: ${{ vars.BLOG_EXTERNAL_API_SCHEMA_READY }}
           BLOG_EXTERNAL_API_TRUSTED_PROXY_IP: ${{ vars.BLOG_EXTERNAL_API_TRUSTED_PROXY_IP }}
 
+          EXAM_ENABLED: ${{ vars.EXAM_ENABLED }}
+          EXAM_SCHEMA_READY: ${{ vars.EXAM_SCHEMA_READY }}
+          EXAM_WORKER_ENABLED: ${{ vars.EXAM_WORKER_ENABLED }}
+          EXAM_AI_ENABLED: ${{ vars.EXAM_AI_ENABLED }}
+
           BACKEND_PORT: ${{ vars.BACKEND_PORT }}
           FRONTEND_PORT: ${{ vars.FRONTEND_PORT }}
           RUOYI_LOG_PATH: ${{ vars.RUOYI_LOG_PATH }}
@@ -204,7 +209,7 @@ jobs:
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_PRIVATE_KEY }}
           fingerprint: ${{ secrets.ECS_SSH_FINGERPRINT }}
-          envs: ACR_REGISTRY,ACR_NAMESPACE,BACKEND_IMAGE_NAME,FRONTEND_IMAGE_NAME,IMAGE_TAG,ACR_USERNAME,ACR_PASSWORD,TOKEN_SECRET,MYSQL_USER,MYSQL_PASSWORD,REDIS_PASSWORD,NOVAMALL_OSS_KEY_ID,NOVAMALL_OSS_KEY_SECRET,MYSQL_HOST,MYSQL_PORT,MYSQL_DATABASE,REDIS_HOST,REDIS_PORT,NOVAMALL_OSS_ENABLED,NOVAMALL_OSS_BUCKET,NOVAMALL_OSS_ENDPOINT,NOVAMALL_OSS_DOMAIN,BLOG_EXTERNAL_API_ENABLED,BLOG_EXTERNAL_API_SCHEMA_READY,BLOG_EXTERNAL_API_TRUSTED_PROXY_IP,BACKEND_PORT,FRONTEND_PORT,RUOYI_LOG_PATH
+          envs: ACR_REGISTRY,ACR_NAMESPACE,BACKEND_IMAGE_NAME,FRONTEND_IMAGE_NAME,IMAGE_TAG,ACR_USERNAME,ACR_PASSWORD,TOKEN_SECRET,MYSQL_USER,MYSQL_PASSWORD,REDIS_PASSWORD,NOVAMALL_OSS_KEY_ID,NOVAMALL_OSS_KEY_SECRET,MYSQL_HOST,MYSQL_PORT,MYSQL_DATABASE,REDIS_HOST,REDIS_PORT,NOVAMALL_OSS_ENABLED,NOVAMALL_OSS_BUCKET,NOVAMALL_OSS_ENDPOINT,NOVAMALL_OSS_DOMAIN,BLOG_EXTERNAL_API_ENABLED,BLOG_EXTERNAL_API_SCHEMA_READY,BLOG_EXTERNAL_API_TRUSTED_PROXY_IP,EXAM_ENABLED,EXAM_SCHEMA_READY,EXAM_WORKER_ENABLED,EXAM_AI_ENABLED,BACKEND_PORT,FRONTEND_PORT,RUOYI_LOG_PATH
           script: |
             set -euo pipefail
 
@@ -225,6 +230,27 @@ jobs:
               echo "RUOYI_LOG_PATH must be /opt/nova-mall/logs" >&2
               exit 1
             fi
+
+            # 智能命题配置校验开始：仅确认迁移完成后允许启用，不自动执行 SQL。
+            EXAM_ENABLED="$(printf '%s' "${EXAM_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')"
+            EXAM_SCHEMA_READY="$(printf '%s' "${EXAM_SCHEMA_READY:-false}" | tr '[:upper:]' '[:lower:]')"
+            EXAM_WORKER_ENABLED="$(printf '%s' "${EXAM_WORKER_ENABLED:-true}" | tr '[:upper:]' '[:lower:]')"
+            EXAM_AI_ENABLED="$(printf '%s' "${EXAM_AI_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')"
+            for exam_flag in "$EXAM_ENABLED" "$EXAM_SCHEMA_READY" "$EXAM_WORKER_ENABLED" "$EXAM_AI_ENABLED"; do
+              case "$exam_flag" in
+                true|false) ;;
+                *) echo "命题配置仅接受 true 或 false（不区分大小写）" >&2; exit 1 ;;
+              esac
+            done
+            if [ "$EXAM_ENABLED" = "true" ] && [ "$EXAM_SCHEMA_READY" != "true" ]; then
+              echo "请先完成四份命题 SQL 迁移，再设置 EXAM_SCHEMA_READY=true" >&2
+              exit 1
+            fi
+            if [ "$EXAM_AI_ENABLED" = "true" ] && [ "$EXAM_ENABLED" != "true" ]; then
+              echo "启用模型调用前须先启用智能命题功能" >&2
+              exit 1
+            fi
+            # 智能命题配置校验结束。
 
             NOVAMALL_OSS_ENABLED="${NOVAMALL_OSS_ENABLED:-false}"
             NOVAMALL_OSS_KEY_ID="${NOVAMALL_OSS_KEY_ID:-}"
@@ -291,6 +317,11 @@ jobs:
               printf 'BLOG_EXTERNAL_API_SCHEMA_READY=%s\n' "$BLOG_EXTERNAL_API_SCHEMA_READY"
               printf 'BLOG_EXTERNAL_API_TRUSTED_PROXY_IP=%s\n' "$BLOG_EXTERNAL_API_TRUSTED_PROXY_IP"
 
+              printf 'EXAM_ENABLED=%s\n' "$EXAM_ENABLED"
+              printf 'EXAM_SCHEMA_READY=%s\n' "$EXAM_SCHEMA_READY"
+              printf 'EXAM_WORKER_ENABLED=%s\n' "$EXAM_WORKER_ENABLED"
+              printf 'EXAM_AI_ENABLED=%s\n' "$EXAM_AI_ENABLED"
+
               printf 'BACKEND_PORT=%s\n' "$BACKEND_PORT"
               printf 'FRONTEND_PORT=%s\n' "$FRONTEND_PORT"
               printf 'RUOYI_LOG_PATH=%s\n' "$RUOYI_LOG_PATH"
@@ -317,6 +348,16 @@ jobs:
             docker compose --env-file .env -f docker-compose.prod.yml run \
               --rm --no-deps --user 0:0 --entrypoint sh backend \
               -c 'set -eu; owner="$(id -u app):$(id -g app)"; chown -R "$owner" -- /home/ruoyi/logs; chmod 0750 -- /home/ruoyi/logs; actual="$(stat -c %u:%g /home/ruoyi/logs)"; [ "$actual" = "$owner" ]'
+
+            # 私有卷只初始化顶层目录，不递归修改已有文件，不接入宿主机 Docker socket。
+            if [ "$EXAM_ENABLED" = "true" ]; then
+              docker compose --env-file .env -f docker-compose.prod.yml run \
+                --rm --no-deps --user 0:0 --entrypoint sh backend \
+                -c 'set -eu; target=/data/exam-private; [ "$EXAM_PRIVATE_ROOT" = "$target" ]; [ ! -L "$target" ]; mkdir -p -- "$target"; owner="$(id -u app):$(id -g app)"; chown "$owner" -- "$target"; chmod 0700 -- "$target"; [ "$(stat -c %u:%g "$target")" = "$owner" ]'
+              docker compose --env-file .env -f docker-compose.prod.yml run \
+                --rm --no-deps --entrypoint sh backend \
+                -c 'set -eu; [ "$(id -u)" != 0 ]; [ -d "$EXAM_PRIVATE_ROOT" ]; [ -w "$EXAM_PRIVATE_ROOT" ]'
+            fi
 
             docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans --wait --wait-timeout 180
 

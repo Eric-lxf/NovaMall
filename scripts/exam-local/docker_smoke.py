@@ -300,6 +300,26 @@ class Smoke:
             self.wait_task(parsed)
         invalid = self.upload("invalid.pdf", b"%PDF-invalid")
         self.wait_task(invalid, "FAILED")
+        # 手动重试只操作隔离库中的损坏合成文件；复用原文件，不会调用模型。
+        retry_path = f"/exam/jobs/{invalid['id']}/retry"
+        self.check("retry preview owner isolation", self.request("GET", retry_path + "-preview", user="stranger")["code"] != 200)
+        self.check("retry preview permission required", self.request("GET", retry_path + "-preview", user="none")["code"] == 403)
+        plan = self.ok("GET", retry_path + "-preview")
+        self.check("document retry needs no model consent", plan["ai"] is False and plan["itemCount"] == 1)
+        retry_body = {"expectedRevision": plan["expectedRevision"], "planFingerprint": plan["planFingerprint"]}
+        file_count = self.sql("select count(*) from exam_file").strip()
+        retry_key = uuid.uuid4().hex
+        retried = self.ok("POST", retry_path, retry_body, key=retry_key)
+        self.check("retry creates fresh task", retried["id"] != invalid["id"])
+        repeated = self.ok("POST", retry_path, retry_body, key=retry_key)
+        self.check("retry repeated key returns same task", repeated["id"] == retried["id"])
+        self.check("retry different key cannot duplicate successor", self.request("POST", retry_path, retry_body, key=uuid.uuid4().hex)["code"] != 200)
+        self.wait_task(retried, "FAILED")
+        original_detail = self.ok("GET", f"/exam/jobs/{invalid['id']}")
+        retry_detail = self.ok("GET", f"/exam/jobs/{retried['id']}")
+        self.check("retry links both audit records", original_detail["progress"]["retryTaskId"] == retried["id"] and retry_detail["retryOfTaskId"] == invalid["id"])
+        self.check("retry preserves original failure", self.ok("GET", f"/exam/tasks/{invalid['id']}")["status"] == "FAILED")
+        self.check("retry reuses private upload", self.sql("select count(*) from exam_file").strip() == file_count)
         # Revocation must be checked at download time, even with a cached JWT.
         self.sql("delete r from sys_role_menu r join sys_menu m on r.menu_id=m.menu_id where r.role_id=901 and m.perms='exam:paper:answers'")
         teacher_export = next(e for e in exports if e["audience"] == "TEACHER")

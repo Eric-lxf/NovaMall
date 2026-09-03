@@ -70,6 +70,22 @@ docker build -t novamall/exam-document:20260903 tools/exam-document-worker
 
 任务记录模型和配置摘要，不复制密钥；密钥、模型或服务地址变化后需重新确认。UI 显示实际服务名/地址/模型；资料版本先授权外发，任务再确认调用和 token 预留上限。无授权不测试真实模型；不要把上传行为视为外发同意。
 
+### DeepSeek 输出与思考预算（2026-09-03 修复）
+
+知识点抽取按每批最多 4000 字符、8 个资料片段拆分，提示模型每批最多返回 8 个简洁知识点。提交和重试窗口会按实际批数推荐调用次数及总 Token 预留，不再给长资料固定预留 3 次调用。
+
+| 环境变量 | 默认 | 用途 |
+|---|---|---|
+| `EXAM_EXTRACT_MAX_OUTPUT_TOKENS` | 8192 | 知识点抽取单次输出上限；DeepSeek V4 关闭思考 |
+| `EXAM_GENERATE_MAX_OUTPUT_TOKENS` | 16384 | 题目生成及格式修复的单次输出上限 |
+| `EXAM_VERIFY_MAX_OUTPUT_TOKENS` | 16384 | 独立求解和复核的单次输出上限 |
+| `EXAM_GENERATE_REASONING_EFFORT` | low | DeepSeek V4 生成的思考强度 |
+| `EXAM_VERIFY_REASONING_EFFORT` | low | DeepSeek V4 求解和复核的思考强度 |
+
+输出上限允许 1024–32768，思考强度允许 `low`、`high`、`max`。根据 [DeepSeek 思考模式文档](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/)，适配器显式设置思考模式，避免默认高强度思考耗尽旧版 4096 输出上限。只对 `api.deepseek.com` 上的 `deepseek-v4-*` 模型发送这些专用参数；其他兼容服务不发送 DeepSeek 参数，但仍使用配置的输出上限。
+
+这些可选变量已接入本地/生产 Compose 和 ECS 部署流水线，未设置时使用上表默认值。ECS 修改同名 GitHub Actions Variables 后需重新部署；仅在页面增加“总 Token 预留”不会改变后端的“单次输出上限”。策略纳入任务模型配置摘要，改动后需要重新确认任务授权。本次修复没有新增 SQL；已有命题表和菜单就绪时，只需更新前后端。
+
 按最小权限分配，菜单查询需要 `exam:task:list`：
 
 在若依角色菜单树中同时勾选「智能命题」父菜单和相应页面，再分配功能权限；只赋予按钮权限不保证动态路由可见。
@@ -78,6 +94,7 @@ docker build -t novamall/exam-document:20260903 tools/exam-document-worker
 - 审核人：`exam:review:list` 查看队列和题目依据；批准还需要 `exam:review:approve`。这不会自动授予他人的原件下载或编辑权限。
 - 交付人：`exam:paper:export`；教师卷和答案还需要 `exam:paper:answers`。
 - AI 操作：单独授予 `exam:knowledge:extract`、`exam:question:generate`、`exam:question:verify`。
+- 手动重试：需要已有 `exam:task:retry`，并保留对应的业务操作权限；管理员也不能替其他所有者复制任务。
 
 适用于单组织内部使用，不是多客户隔离 SaaS。学生预览是后台无答案投影视图，不是公开学生答题网站。批准人会被记录，但没有强制“出题与审核必须不同人员”的四眼规则；可通过角色分离实施。
 
@@ -92,7 +109,11 @@ docker build -t novamall/exam-document:20260903 tools/exam-document-worker
 7. 选择已批准题目编排试卷，核对排序、分值、时长，再定版。定版内容不可原地编辑。
 8. 分别预览学生/教师卷，创建 DOCX/PDF/XLSX 导出任务，从导出中心私有下载。XLSX 含答案，仅教师版；不是用户 Excel 导入器。
 
-当生成只有部分成功，查看任务的槽位状态；回到蓝图只选缺失/失败槽位创建新任务并重新确认预算，不重放整个付费任务。知识点任务显示逐批状态，已保存候选保留；再次抽取会新增候选，应先检查再决定。
+失败或部分完成后，在“任务中心 → 重试”或“详情 → 手动重试未完成项”操作。知识点抽取、题目生成、独立复核、资料解析和试卷导出均支持；原任务及其已保存结果、调用账目不变，创建关联的新任务，只处理未成功的批次/槽位。旧版大批次抽取失败的任务也可使用新策略重试，不必重新导入资料。
+
+AI 重试须重新核对当前模型、资料外发授权及预算；原调用费用不会撤销。若为“需人工确认”或存在不确定调用，还须确认可能重复远端执行/计费的风险。已经成功落库的项目不会重放；全部子项都成功时拒绝重试。资料版本、蓝图或题目状态不再满足要求时，先按提示核对，不绕过审核门禁。
+
+双击或网络响应丢失时，继续点击“确认上次重试提交”，沿用相同请求与幂等键；每个原任务最多建立一个直接重试后继。如果新任务再次失败，应对新任务重试。排队中/执行中/已完成/已取消的业务任务不允许重试。基础自检保留原有最多运行三次的规则。
 
 ## 6. 硬限制和留存
 
@@ -135,6 +156,8 @@ python -m unittest -v test_worker
 
 前端只读夹具：`cd frontend` 后执行 `npx vite --config tests/exam-ui.vite.config.mjs`，打开 `http://127.0.0.1:5193/tests/exam-ui.html`。页面有明确测试标识；所有修改请求拒绝，不能当成已完成前后端联调。不要将此夹具作为部署入口。
 
+重试页面使用独立的内存夹具，模拟失败、部分提交响应丢失和不确定计费确认，不访问后端或模型：先启动 `npx vite --config tests/exam-retry-ui.vite.config.mjs`，再用已有 Playwright 安装运行 `node tests/exam-retry-browser.mjs`。可用 `PLAYWRIGHT_PACKAGE` 指定包路径；没有捆绑浏览器时可设置 `PLAYWRIGHT_CHANNEL=msedge` 或 `chrome` 使用已安装浏览器。截图写入 `tmp/exam-ai-retry-qa/`，不纳入生产构建。
+
 真实 Docker/MySQL/JWT 验收：使用 [scripts/exam-local/README.md](../scripts/exam-local/README.md)。该脚本仅创建独立、唯一命名的本地测试容器及 RAM 数据库，不读取项目 `.env`，关闭 AI，最后清理自己的容器。它不是生产部署脚本。真实浏览器 QA 配置 `tests/exam-live.vite.config.mjs` 仅代理到隔离后端 18080，无请求 Mock。
 
 ## 8. 故障处理与回退
@@ -146,6 +169,8 @@ python -m unittest -v test_worker
 | `EXAM_DOCUMENT_WORKER_NOT_READY` / `EXAM_CONVERTER_MISSING` | 检查镜像、Docker 和 LibreOffice；失败不是有效 PDF |
 | `EXAM_SOURCE_AUTH_CHANGED` / `EXAM_SOURCE_UNAVAILABLE` | 核对版本/可用片段/外发授权，再创建新的明确任务 |
 | `EXAM_BUDGET_EXCEEDED` | 已完成结果保留，核对调用账目后决定是否追加；不自动增加预算 |
+| `EXAM_OUTPUT_TRUNCATED` / 结束原因 `length` | 模型达到单次输出上限；检查上述输出/思考策略。部署修复后通过任务中心手动重试未完成项；仍失败时进一步缩小资料范围或经确认调整单次上限，不把截断内容当成有效结果 |
+| `EXAM_RETRY_ALREADY_CREATED` | 已有直接重试后继，进入原任务详情查看新任务，不反复重试原任务 |
 | `NEEDS_CONFIRMATION` / `EXAM_RESULT_UNCERTAIN` | 可能已调用或计费；先查供应商请求记录和本地已保存结果，不盲目重试 |
 | 遗留的 `DISPATCHING` 调用记录 | 进程中断或取消可能使使用量无法写回；按计费未知处理，不等于请求未发出或费用为零 |
 | `EXAM_VERSION_CONFLICT` | 刷新并比较新版本，不能覆盖他人修改 |

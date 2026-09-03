@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { webcrypto } from 'node:crypto'
-import { canCancelTask, canRetryTask, isActiveTask, newRequestKey, pollDelay, taskLabels } from '../src/views/exam/task/task-state.js'
+import { canCancelTask, canRetryTask, isActiveTask, newRequestKey, pollDelay, taskLabels, errorLabel, callStatusLabel, finishReasonLabel } from '../src/views/exam/task/task-state.js'
 
 test('active statuses exclude terminal and uncertain tasks', () => {
   assert.deepEqual(Object.keys(taskLabels).filter(status => isActiveTask({ status })), ['QUEUED', 'RUNNING', 'CANCEL_REQUESTED'])
@@ -21,4 +21,17 @@ test('polling stops for hidden/inactive/disabled pages, repeated errors and term
 test('keys use cryptographic UUID or a secure-context-independent random bytes fallback', () => {
   assert.match(newRequestKey(webcrypto), /^[A-Za-z0-9_-]{16,64}$/)
   assert.match(newRequestKey({ getRandomValues: buffer => webcrypto.getRandomValues(buffer) }), /^[0-9a-f]{32}$/)
+})
+test('failed, partial and uncertain business tasks expose manual retry but active/successful tasks do not', () => {
+  for (const kind of ['KNOWLEDGE_EXTRACT', 'QUESTION_GENERATE', 'QUESTION_VERIFY', 'SOURCE_PARSE', 'PAPER_EXPORT']) {
+    for (const status of ['FAILED', 'PARTIAL_SUCCESS', 'NEEDS_CONFIRMATION']) assert.equal(canRetryTask({ kind, status }), true)
+    for (const status of ['QUEUED', 'RUNNING', 'SUCCEEDED', 'CANCELLED', 'CANCEL_REQUESTED']) assert.equal(canRetryTask({ kind, status }), false)
+  }
+})
+test('failure and model finish reasons are readable without hiding unknown error codes', () => {
+  assert.match(errorLabel('EXAM_OUTPUT_TRUNCATED'), /输出.*上限/)
+  assert.match(errorLabel('EXAM_RESULT_UNCERTAIN'), /计费/)
+  assert.equal(errorLabel('NEW_ERROR'), 'NEW_ERROR')
+  assert.equal(callStatusLabel('RESPONDED'), '已响应')
+  assert.equal(finishReasonLabel('length'), '达到输出上限')
 })

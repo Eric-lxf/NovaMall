@@ -37,4 +37,8 @@ public class ExamWorkflowConfiguration {
             com.ruoyi.exam.security.ExamExecutionAuthorizer authorizer,ExamSources sources,ExamKnowledge knowledge,ExamBlueprints blueprints,ExamQuestions questions) {
         return new com.ruoyi.exam.ai.ExamAiJobs(db,jobs,gateway,authorizer,sources,knowledge,blueprints,questions);
     }
+    @Bean public ExamJobRetries examJobRetries(ExamDataStore db,com.ruoyi.exam.repository.ExamTaskRepository tasks,ExamJobs jobs,
+            com.ruoyi.exam.ai.ExamAiJobs ai,com.ruoyi.exam.document.ExamDocumentJobs documents,com.ruoyi.exam.security.ExamExecutionAuthorizer authorizer) {
+        return new ExamJobRetries(db,tasks,jobs,ai,documents,authorizer);
+    }
 }

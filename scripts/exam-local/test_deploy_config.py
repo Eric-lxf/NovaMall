@@ -13,6 +13,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILES = ("docker-compose.yml", "docker-compose.prod.yml")
 FLAGS = ("EXAM_ENABLED", "EXAM_SCHEMA_READY", "EXAM_WORKER_ENABLED", "EXAM_AI_ENABLED")
+AI_POLICIES = {"EXAM_EXTRACT_MAX_OUTPUT_TOKENS": "8192", "EXAM_GENERATE_MAX_OUTPUT_TOKENS": "16384",
+               "EXAM_VERIFY_MAX_OUTPUT_TOKENS": "16384", "EXAM_GENERATE_REASONING_EFFORT": "low", "EXAM_VERIFY_REASONING_EFFORT": "low"}
 PRIVATE_ROOT = "/data/exam-private"
 WORKFLOW = ROOT / ".github/workflows/deploy-ecs.yml"
 
@@ -76,7 +78,7 @@ class ExamDeploymentConfigTest(unittest.TestCase):
 
     def run_guard(self, values=None):
         env = os.environ.copy()
-        for flag in FLAGS:
+        for flag in (*FLAGS, *AI_POLICIES):
             env.pop(flag, None)
         env.update(values or {})
         script = "set -eu\n" + self.guard + '\nprintf "%s|%s|%s|%s" "$EXAM_ENABLED" "$EXAM_SCHEMA_READY" "$EXAM_WORKER_ENABLED" "$EXAM_AI_ENABLED"\n'
@@ -126,11 +128,28 @@ class ExamDeploymentConfigTest(unittest.TestCase):
 
     def test_actions_maps_persists_and_forwards_every_exam_flag(self):
         forwarding = re.search(r"^\s+envs: (.+)$", self.workflow, re.MULTILINE).group(1).split(",")
-        for flag in FLAGS:
+        for flag in (*FLAGS, *AI_POLICIES):
             with self.subTest(flag=flag):
                 self.assertIn(f"{flag}: ${{{{ vars.{flag} }}}}", self.workflow)
                 self.assertIn(flag, forwarding)
                 self.assertIn(f"printf '{flag}=%s\\n' \"${flag}\"", self.deploy_script)
+    def test_ai_policies_are_passed_to_both_compose_services(self):
+        for filename in COMPOSE_FILES:
+            env = self.render(filename)["services"]["backend"]["environment"]
+            for key, value in AI_POLICIES.items():
+                self.assertEqual(value, str(env[key]))
+            custom = {"EXAM_EXTRACT_MAX_OUTPUT_TOKENS": "12288", "EXAM_VERIFY_REASONING_EFFORT": "high"}
+            env = self.render(filename, custom)["services"]["backend"]["environment"]
+            for key, value in custom.items():
+                self.assertEqual(value, str(env[key]))
+
+    def test_guard_rejects_unsafe_output_limits_and_effort(self):
+        for key in AI_POLICIES:
+            values = ("1023", "32769", "8192\nEXAM_AI_ENABLED=true", "1e4", "-8192", "0008192") if key.endswith("TOKENS") else ("invalid", "high\nEXAM_AI_ENABLED=true")
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    self.assertNotEqual(0, self.run_guard({key: value}).returncode)
+        self.assertEqual(0, self.run_guard({"EXAM_EXTRACT_MAX_OUTPUT_TOKENS": "1024", "EXAM_VERIFY_MAX_OUTPUT_TOKENS": "32768", "EXAM_GENERATE_REASONING_EFFORT": "max"}).returncode)
 
     def test_guard_defaults_and_confirmed_basic_enablement(self):
         default = self.run_guard()

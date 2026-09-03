@@ -21,6 +21,29 @@ public class ExamDocumentJobs implements ExamJobHandler {
         this.db=db; this.jobs=jobs; this.runner=runner; this.authorizer=authorizer; this.sources=sources; this.files=files; this.papers=papers;
     }
     public boolean configured() { return runner.configured(); }
+    public void validateRetry(ExamActor actor,String kind,JsonNode input) {
+        ExamJson.require(supports(kind),"不支持的文档任务");
+        requirePermission(actor.userId(),PARSE.equals(kind)?"exam:source:edit":"exam:paper:export");
+        if(!"XLSX".equals(input.path("format").asText()) && !runner.configured()) throw new ExamException("EXAM_DOCUMENT_WORKER_NOT_READY","隔离文档工作进程未配置");
+        if(PARSE.equals(kind)) {
+            files.read(actor,ExamJson.id(input,"fileId"));
+            if(input.has("sourceId")) {
+                var source=sources.detail(actor,ExamJson.id(input,"sourceId"));
+                ExamJson.require(source.path("revision").asLong()==input.path("expectedRevision").asLong(-1),"原资料已变更，请重新上传新版本");
+            }
+        } else {
+            if("TEACHER".equals(input.path("audience").asText())) requirePermission(actor.userId(),"exam:paper:answers");
+            papers.requireExportable(actor,ExamJson.id(input,"paperVersionId"));
+        }
+    }
+    public ExamTask retry(ExamActor actor,String kind,JsonNode original,String key,JsonNode request) {
+        validateRetry(actor,kind,original);
+        var input=((ObjectNode)original).deepCopy().put("retryOfTaskId",request.path("retryOfTaskId").asText());
+        var task=jobs.submit(actor,kind,PARSE.equals(kind)?"重试解析："+input.path("title").asText():"重试试卷导出："+input.path("format").asText(),key,request,input,List.of(PARSE.equals(kind)?"parse":"export"));
+        if(EXPORT.equals(kind)) db.insert("exam_export",values("owner_user_id",actor.userId(),"paper_version_id",ExamJson.id(input,"paperVersionId"),"format",input.path("format").asText(),
+                "audience",input.path("audience").asText(),"task_id",task.id(),"status","QUEUED","created_at",db.now()));
+        return task;
+    }
     public ExamTask parse(ExamActor actor,String key,String title,String filename,byte[] bytes,Long sourceId,Long revision) {
         ExamJson.require(title!=null && !title.isBlank() && title.length()<=160,"资料标题无效");
         ExamJson.require(filename!=null && filename.matches("(?i).+\\.(docx|pdf)$"),"只接收 DOCX 或文本 PDF");

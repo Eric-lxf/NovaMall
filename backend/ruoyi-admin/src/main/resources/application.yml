@@ -19,6 +19,12 @@ exam:
   worker-enabled: ${EXAM_WORKER_ENABLED:true}
   private-root: ${EXAM_PRIVATE_ROOT:}
   ai-enabled: ${EXAM_AI_ENABLED:false}
+  # 输出与推理预算分开配置；知识点抽取固定关闭 DeepSeek 思考。
+  extract-max-output-tokens: ${EXAM_EXTRACT_MAX_OUTPUT_TOKENS:8192}
+  generate-max-output-tokens: ${EXAM_GENERATE_MAX_OUTPUT_TOKENS:16384}
+  verify-max-output-tokens: ${EXAM_VERIFY_MAX_OUTPUT_TOKENS:16384}
+  generate-reasoning-effort: ${EXAM_GENERATE_REASONING_EFFORT:low}
+  verify-reasoning-effort: ${EXAM_VERIFY_REASONING_EFFORT:low}
   document-image: ${EXAM_DOCUMENT_IMAGE:}
 
 # 开发环境配置

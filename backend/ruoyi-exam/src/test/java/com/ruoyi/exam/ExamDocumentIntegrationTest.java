@@ -91,6 +91,51 @@ class ExamDocumentIntegrationTest extends ExamWorkflowIntegrationTest {
         props.setDocumentImage("evil --privileged"); assertFalse(runner.configured());
         props.setDocumentImage("novamall/exam-document:1"); assertTrue(runner.configured());
     }
+    private ExamJobRetries retries(ExamDocumentJobs docs) {
+        return new ExamJobRetries(db,test.repository,new ExamJobs(db,test.repository),org.mockito.Mockito.mock(com.ruoyi.exam.ai.ExamAiJobs.class),docs,user->true);
+    }
+    private com.fasterxml.jackson.databind.node.ObjectNode retryBody(ExamJobRetries retries,long id) {
+        var plan=retries.preview(owner,id); assertFalse(plan.path("ai").asBoolean());
+        return ExamJson.object().put("expectedRevision",plan.path("expectedRevision").asLong()).put("planFingerprint",plan.path("planFingerprint").asText());
+    }
+    private void execute(ExamDocumentJobs docs,com.ruoyi.exam.domain.ExamTask task) {
+        try(var worker=new ExamTaskWorker(test.repository,user->true,new ExamReadiness(test.repository),java.time.Clock.systemUTC(),List.of(docs))) { worker.executeOne(task); }
+    }
+    @Test void failedParserRetriesStoredFileWithoutDuplicatingUpload() {
+        var failing=new java.util.concurrent.atomic.AtomicBoolean(true);
+        var docs=documents(input->{
+            if(failing.get()) throw new ExamException("EXAM_DOCUMENT_FAILED","合成解析失败");
+            var parsed=ExamJson.object(); parsed.putArray("warnings");
+            parsed.putArray("fragments").add(ExamJson.object().put("text","重试解析得到的合成文字").set("locator",ExamJson.object().put("kind","DOCX")));
+            return parsed;
+        });
+        var task=docs.parse(owner,UUID.randomUUID().toString(),"重试文档","sample.docx","synthetic-only".getBytes(),null,null); execute(docs,task);
+        assertEquals("FAILED",test.repository.find(task.id()).orElseThrow().status()); long files=db.count("select count(*) from exam_file");
+        var retries=retries(docs); var body=retryBody(retries,task.id()); var key=UUID.randomUUID().toString();
+        var retried=retries.retry(owner,task.id(),key,body); assertEquals(retried.id(),retries.retry(owner,task.id(),key,body).id());
+        assertEquals(files,db.count("select count(*) from exam_file")); failing.set(false); execute(docs,retried);
+        assertEquals("SUCCEEDED",test.repository.find(retried.id()).orElseThrow().status());
+        assertEquals(files,db.count("select count(*) from exam_file")); assertEquals(2,db.count("select count(*) from exam_source"));
+    }
+    @Test void failedExportCreatesNewPrivateExportRecordAndPreservesOriginal() {
+        var failing=new java.util.concurrent.atomic.AtomicBoolean(true); var p=paper(approve(create(0)));
+        var docs=documents(input->{ if(failing.get()) throw new ExamException("EXAM_DOCUMENT_FAILED","合成导出失败");
+            return ExamJson.object().put("data",Base64.getEncoder().encodeToString("synthetic-render-result".getBytes())); });
+        var task=docs.export(owner,UUID.randomUUID().toString(),ExamJson.object().put("paperVersionId",p.path("currentVersionId").asText()).put("format","DOCX").put("audience","TEACHER"));
+        execute(docs,task); var retries=retries(docs); var body=retryBody(retries,task.id()); var key=UUID.randomUUID().toString();
+        var retried=retries.retry(owner,task.id(),key,body); retries.retry(owner,task.id(),key,body);
+        assertEquals(2,db.count("select count(*) from exam_export")); failing.set(false); execute(docs,retried);
+        assertEquals("FAILED",test.repository.find(task.id()).orElseThrow().status()); assertEquals("SUCCEEDED",test.repository.find(retried.id()).orElseThrow().status());
+        long exportId=docs.exports(owner).get(0).path("id").asLong(); assertArrayEquals("synthetic-render-result".getBytes(),docs.download(owner,exportId).bytes());
+    }
+    @Test void revokedSourceBlocksExportRetryAndNoSuccessorIsCreated() {
+        var p=paper(approve(create(0))); var docs=documents(input->{ throw new ExamException("EXAM_DOCUMENT_FAILED","合成失败"); });
+        var task=docs.export(owner,UUID.randomUUID().toString(),ExamJson.object().put("paperVersionId",p.path("currentVersionId").asText()).put("format","DOCX").put("audience","STUDENT"));
+        execute(docs,task); var retries=retries(docs); var body=retryBody(retries,task.id());
+        sources.toggle(owner,id(source),revision(source).put("enabled",false));
+        assertThrows(ExamException.class,()->retries.retry(owner,task.id(),UUID.randomUUID().toString(),body));
+        assertEquals(1,db.count("select count(*) from exam_task"));
+    }
     private ExamDocumentJobs documents(java.util.function.Function<JsonNode,JsonNode> handler) {
         var props=new ExamProperties(); props.setPrivateRoot(temporary.resolve("private").toString());
         var files=new ExamFiles(db,props,List.of(temporary.resolve("public")));

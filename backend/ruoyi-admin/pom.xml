@@ -80,6 +80,13 @@
             <artifactId>ruoyi-mall-payment</artifactId>
         </dependency>
 
+        <!-- 智能命题：默认关闭，独立任务基础 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-exam</artifactId>
+            <version>${ruoyi.version}</version>
+        </dependency>
+
         <!-- AI 历史学习平台 -->
         <dependency>
             <groupId>com.ruoyi</groupId>

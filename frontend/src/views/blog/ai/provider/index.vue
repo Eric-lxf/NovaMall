@@ -286,7 +286,10 @@ const moduleMetaMap = {
   optimize: { name: '文本优化', desc: '用于内容改写、提炼与增强。' },
   comment_moderate: { name: '评论审核', desc: '用于评论智能审核。' },
   bill_vision: { name: '账单识别', desc: '用于账单/微信交易明细图片视觉识别。请填写视觉模型（如 qwen3.5-ocr），不要填纯文本模型。' },
-  bill_advice: { name: '账单建议', desc: '用于账单分析建议生成。' }
+  bill_advice: { name: '账单建议', desc: '用于账单分析建议生成。' },
+  history_extract: { name: '历史资料抽取', desc: '用于历史资料结构化抽取。' },
+  exam_generate: { name: '智能命题', desc: '用于授权资料的知识点抽取与题目生成。' },
+  exam_verify: { name: '命题独立复核', desc: '用于独立解题与质量复核；可配置与生成不同的模型。' }
 }
 
 const queryParams = ref({

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "exam.question.v1",
+  "questions": [
+    {
+      "slotId": "s1", "type": "SINGLE_CHOICE", "stem": "新员工应在入职后多久完成设备登记？",
+      "options": [{"id":"A","text":"一个工作日"},{"id":"B","text":"三个工作日"},{"id":"C","text":"五个工作日"}],
+      "correctOptionIds": ["B"], "analysis": "样本手册规定在入职后三个工作日内登记。", "knowledgePointIds": ["onboarding"],
+      "sourceRefs": [{"sourceVersionId":"fixture-v1","fragmentId":"f1","quote":"新员工应在入职后三个工作日内完成设备登记。"}]
+    },
+    {
+      "slotId": "s2", "type": "MULTIPLE_CHOICE", "stem": "哪些做法符合样本手册的数据保护要求？",
+      "options": [{"id":"A","text":"不使用公开下载链接传播内部资料"},{"id":"B","text":"离职后及时收回系统权限"},{"id":"C","text":"将内部资料公开传播"}],
+      "correctOptionIds": ["A","B"], "analysis": "资料传播和离职权限均受手册约束。", "knowledgePointIds": ["privacy"],
+      "sourceRefs": [{"sourceVersionId":"fixture-v1","fragmentId":"f5","quote":"内部培训资料不得通过公开下载链接传播。"},{"sourceVersionId":"fixture-v1","fragmentId":"f6","quote":"员工离职后应及时收回系统访问权限。"}]
+    },
+    {
+      "slotId": "s3", "type": "TRUE_FALSE", "stem": "普通服务请求应在两个工作小时内首次响应。",
+      "answerBoolean": true, "analysis": "这一表述与样本手册一致。", "knowledgePointIds": ["service"],
+      "sourceRefs": [{"sourceVersionId":"fixture-v1","fragmentId":"f3","quote":"普通服务请求应在两个工作小时内首次响应。"}]
+    },
+    {
+      "slotId": "s4", "type": "SHORT_ANSWER", "stem": "按样本手册简述处理请求的两个步骤。",
+      "referenceAnswer": "先核对请求编号，再记录处理结果。",
+      "rubric": [{"point":"先核对请求编号","weight":50},{"point":"再记录处理结果","weight":50}],
+      "analysis": "两个步骤的内容和先后顺序均来自手册。", "knowledgePointIds": ["service"],
+      "sourceRefs": [{"sourceVersionId":"fixture-v1","fragmentId":"f4","quote":"处理请求时，必须先核对请求编号，再记录处理结果。"}]
+    }
+  ]
+}

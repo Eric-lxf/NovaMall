@@ -10,7 +10,8 @@
     "build:prod": "vite build",
     "build:prod:lowmem": "VITE_LOW_MEM_BUILD=1 NODE_OPTIONS=--max-old-space-size=1280 vite build",
     "build:stage": "vite build --mode staging",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:exam": "node --test tests/exam-task-state.test.js tests/exam-workflow-state.test.js tests/exam-requirements.test.js"
   },
   "repository": {
     "type": "git",

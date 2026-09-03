@@ -8,6 +8,7 @@ COPY backend/ruoyi-common ./ruoyi-common
 COPY backend/ruoyi-quartz ./ruoyi-quartz
 COPY backend/ruoyi-generator ./ruoyi-generator
 COPY backend/ruoyi-blog ./ruoyi-blog
+COPY backend/ruoyi-exam ./ruoyi-exam
 COPY backend/ruoyi-wechat ./ruoyi-wechat
 COPY backend/ruoyi-mall-product ./ruoyi-mall-product
 COPY backend/ruoyi-mall-trade ./ruoyi-mall-trade

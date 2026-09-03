@@ -236,6 +236,7 @@
     </dependencyManagement>
 
     <modules>
+        <module>ruoyi-exam</module>
         <module>ruoyi-admin</module>
         <module>ruoyi-framework</module>
         <module>ruoyi-system</module>

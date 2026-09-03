@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.ruoyi</groupId><artifactId>ruoyi</artifactId><version>3.9.2</version>
+        <relativePath>../../backend/pom.xml</relativePath>
+    </parent>
+    <artifactId>exam-p0-validation</artifactId>
+    <description>Isolated self-authored fixture compatibility probe; not an application module</description>
+    <properties>
+        <exam.fixtures>${project.basedir}/../../tmp/exam-p0/fixtures</exam.fixtures>
+    </properties>
+    <dependencies>
+        <dependency><groupId>org.apache.poi</groupId><artifactId>poi-ooxml</artifactId></dependency>
+        <dependency><groupId>org.apache.pdfbox</groupId><artifactId>pdfbox</artifactId><version>2.0.32</version></dependency>
+        <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+    </dependencies>
+    <build><plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.4</version>
+            <configuration>
+                <argLine>-Xmx384m -Dfile.encoding=UTF-8</argLine>
+                <systemPropertyVariables><exam.fixtures>${exam.fixtures}</exam.fixtures></systemPropertyVariables>
+            </configuration>
+        </plugin>
+    </plugins></build>
+</project>

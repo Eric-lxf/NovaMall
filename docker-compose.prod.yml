@@ -26,6 +26,8 @@ services:
       EXAM_VERIFY_REASONING_EFFORT: ${EXAM_VERIFY_REASONING_EFFORT:-low}
       # 固定使用独立命名卷，不得指向公开上传目录。
       EXAM_PRIVATE_ROOT: /data/exam-private
+      WEDDING_ADMIN_BASE_URL: ${WEDDING_ADMIN_BASE_URL:-http://172.17.0.1:8081}
+      WEDDING_ADMIN_TOKEN: ${WEDDING_ADMIN_TOKEN:-}
 
       MYSQL_HOST: ${MYSQL_HOST}
       MYSQL_PORT: ${MYSQL_PORT}

@@ -27,6 +27,14 @@ exam:
   verify-reasoning-effort: ${EXAM_VERIFY_REASONING_EFFORT:low}
   document-image: ${EXAM_DOCUMENT_IMAGE:}
 
+# 吾喜备婚运营代理（服务端注入 X-Admin-Token 转发至独立部署的 wedding-backend）
+wedding:
+  admin:
+    base-url: ${WEDDING_ADMIN_BASE_URL:http://127.0.0.1:8080}
+    token: ${WEDDING_ADMIN_TOKEN:wuxi_dev_admin_token_2026}
+    connect-timeout-ms: 5000
+    read-timeout-ms: 10000
+
 # 开发环境配置
 server:
   # 服务器的HTTP端口，默认为8080

@@ -112,6 +112,8 @@ services:
       EXAM_VERIFY_REASONING_EFFORT: ${EXAM_VERIFY_REASONING_EFFORT:-low}
       # 与公开上传卷分开持久化，不给后端挂载 Docker socket。
       EXAM_PRIVATE_ROOT: /data/exam-private
+      WEDDING_ADMIN_BASE_URL: ${WEDDING_ADMIN_BASE_URL:-http://host.docker.internal:8081}
+      WEDDING_ADMIN_TOKEN: ${WEDDING_ADMIN_TOKEN:-}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: nova_mall

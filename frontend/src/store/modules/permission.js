@@ -40,6 +40,8 @@ const viewFallback = {
   'mall/admin/spu/index': () => import('@/views/mall/admin/spu/index.vue'),
   'mall/admin/order/index': () => import('@/views/mall/admin/order/index.vue'),
   'mall/admin/payment/index': () => import('@/views/mall/admin/payment/index.vue'),
+  'wedding/redeem/index': () => import('@/views/wedding/redeem/index.vue'),
+  'wedding/users/index': () => import('@/views/wedding/users/index.vue'),
   'system/menu/index': () => import('@/views/system/menu/index.vue'),
 }
 

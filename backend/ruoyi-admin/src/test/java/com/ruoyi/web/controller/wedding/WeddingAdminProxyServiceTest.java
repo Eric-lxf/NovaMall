@@ -102,4 +102,44 @@ class WeddingAdminProxyServiceTest {
         assertEquals(502, res.get(AjaxResult.CODE_TAG));
         assertTrue(String.valueOf(res.get(AjaxResult.MSG_TAG)).contains("WEDDING_ADMIN_TOKEN"));
     }
+
+    @Test
+    void forwardsPayOrdersQueryWithFilterParamsAndMapsSummary() {
+        mockServer.expect(requestTo("http://127.0.0.1:8081/api/admin/pay-orders?pageNum=1&status=PAID&envMode=prod"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-Admin-Token", "shared_admin_secret_2026"))
+                .andRespond(withSuccess(
+                        "{\"code\":200,\"message\":\"OK\",\"data\":{\"total\":2,\"rows\":[],\"summary\":{\"paidOrders\":2,\"paidAmountYuan\":\"56.00\"}}}",
+                        MediaType.APPLICATION_JSON));
+
+        Map<String, Object> query = new java.util.LinkedHashMap<>();
+        query.put("pageNum", 1);
+        query.put("status", "PAID");
+        query.put("envMode", "prod");
+        query.put("outTradeNo", "");
+
+        AjaxResult res = proxyService.get("/api/admin/pay-orders", query);
+        mockServer.verify();
+        assertEquals(200, res.get(AjaxResult.CODE_TAG));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) res.get(AjaxResult.DATA_TAG);
+        assertEquals(2, data.get("total"));
+    }
+
+    @Test
+    void controllerForwardsAllPayOrderFilterParameters() {
+        mockServer.expect(requestTo(
+                        "http://127.0.0.1:8081/api/admin/pay-orders?pageNum=2&pageSize=50&outTradeNo=VP20261124001&openid=oid_1&weddingId=100&status=PAID&envMode=prod"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-Admin-Token", "shared_admin_secret_2026"))
+                .andRespond(withSuccess(
+                        "{\"code\":200,\"message\":\"OK\",\"data\":{\"total\":1,\"rows\":[],\"summary\":{\"totalOrders\":1,\"paidOrders\":1,\"pendingOrders\":0,\"paidAmountYuan\":\"28.00\"}}}",
+                        MediaType.APPLICATION_JSON));
+
+        WeddingAdminProxyController controller = new WeddingAdminProxyController(proxyService);
+        AjaxResult res = controller.listPayOrders(2, 50, "VP20261124001", "oid_1", 100L, "PAID", "prod");
+
+        mockServer.verify();
+        assertEquals(200, res.get(AjaxResult.CODE_TAG));
+    }
 }

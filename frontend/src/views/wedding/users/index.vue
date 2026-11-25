@@ -71,11 +71,12 @@
           <el-tag v-else type="info" size="small">单人</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="Pro 权益" width="140" align="center">
+      <el-table-column label="Pro 权益" width="195" align="center">
         <template #default="{ row }">
           <div v-if="row.isPro === 1">
             <el-tag type="warning" effect="dark" size="small">Pro 终身版</el-tag>
-            <div v-if="row.redeemCodeUsed" class="sub-code">{{ row.redeemCodeUsed }}</div>
+            <div v-if="row.redeemCodeUsed === 'VPAY'" class="sub-vpay">已解锁 (VPAY · ¥28 站内直付)</div>
+            <div v-else-if="row.redeemCodeUsed" class="sub-code">{{ row.redeemCodeUsed }}</div>
           </div>
           <el-tag v-else type="info" size="small">免费版</el-tag>
         </template>
@@ -159,7 +160,10 @@
               <el-tag v-if="spaceDetail.wedding.isPro === 1" type="warning" size="small">Pro 终身版</el-tag>
               <el-tag v-else type="info" size="small">免费体验版</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="使用激活码">{{ spaceDetail.wedding.redeemCodeUsed || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="解锁凭证">
+              <span v-if="spaceDetail.wedding.redeemCodeUsed === 'VPAY'">已解锁 (VPAY · ¥28 站内直付)</span>
+              <span v-else>{{ spaceDetail.wedding.redeemCodeUsed || '-' }}</span>
+            </el-descriptions-item>
             <el-descriptions-item label="主建人 OpenID" :span="2">{{ spaceDetail.wedding.creatorOpenid }} ({{ spaceDetail.wedding.creatorRole }})</el-descriptions-item>
             <el-descriptions-item label="伴侣 OpenID" :span="2">{{ spaceDetail.wedding.partnerOpenid || '未绑定' }} ({{ spaceDetail.wedding.partnerRole }})</el-descriptions-item>
             <el-descriptions-item label="当前使用模板" :span="2">{{ spaceDetail.activeTemplateTitle || '系统默认工作区清单' }}</el-descriptions-item>
@@ -291,6 +295,12 @@ onMounted(() => {
   font-size: 11px;
   color: #909399;
   font-family: Consolas, Monaco, monospace;
+  margin-top: 2px;
+}
+.sub-vpay {
+  font-size: 11px;
+  color: #67c23a;
+  font-weight: 500;
   margin-top: 2px;
 }
 </style>

@@ -51,3 +51,12 @@ export function getWeddingAdminDetail(weddingId) {
     method: 'get'
   })
 }
+
+// 分页查询微信虚拟支付订单与营收汇总
+export function listPayOrders(query) {
+  return request({
+    url: '/wedding/admin/pay-orders',
+    method: 'get',
+    params: query
+  })
+}

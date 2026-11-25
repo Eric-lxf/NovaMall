@@ -19,7 +19,7 @@ import org.springframework.web.util.UriUtils;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 吾喜备婚运营管理代理控制器（激活码管理 + 微信用户与婚礼空间管理）
+ * 吾喜备婚运营管理代理控制器（支付订单管理 + 激活码管理 + 微信用户与婚礼空间管理）
  */
 @RestController
 @RequestMapping("/wedding/admin")
@@ -30,6 +30,28 @@ public class WeddingAdminProxyController extends BaseController
     public WeddingAdminProxyController(WeddingAdminProxyService proxyService)
     {
         this.proxyService = proxyService;
+    }
+
+    @PreAuthorize("@ss.hasPermi('wedding:order:list')")
+    @GetMapping("/pay-orders")
+    public AjaxResult listPayOrders(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "20") Integer pageSize,
+            @RequestParam(required = false) String outTradeNo,
+            @RequestParam(required = false) String openid,
+            @RequestParam(required = false) Long weddingId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String envMode)
+    {
+        Map<String, Object> query = new LinkedHashMap<>();
+        query.put("pageNum", pageNum);
+        query.put("pageSize", pageSize);
+        query.put("outTradeNo", outTradeNo);
+        query.put("openid", openid);
+        query.put("weddingId", weddingId);
+        query.put("status", status);
+        query.put("envMode", envMode);
+        return proxyService.get("/api/admin/pay-orders", query);
     }
 
     @PreAuthorize("@ss.hasPermi('wedding:redeem:list')")

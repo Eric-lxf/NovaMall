@@ -273,7 +273,7 @@ jobs:
             # 智能命题配置校验结束。
 
             NOVAMALL_OSS_ENABLED="${NOVAMALL_OSS_ENABLED:-false}"
-            WEDDING_ADMIN_BASE_URL="${WEDDING_ADMIN_BASE_URL:-http://172.17.0.1:8081}"
+            WEDDING_ADMIN_BASE_URL="${WEDDING_ADMIN_BASE_URL:-http://wedding-backend:8080}"
             WEDDING_ADMIN_TOKEN="${WEDDING_ADMIN_TOKEN:-}"
             NOVAMALL_OSS_KEY_ID="${NOVAMALL_OSS_KEY_ID:-}"
             NOVAMALL_OSS_KEY_SECRET="${NOVAMALL_OSS_KEY_SECRET:-}"
@@ -365,6 +365,10 @@ jobs:
             # 使用 commit SHA，不使用 latest，避免镜像版本错配。
             export BACKEND_IMAGE="${ACR_REGISTRY}/${ACR_NAMESPACE}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
             export FRONTEND_IMAGE="${ACR_REGISTRY}/${ACR_NAMESPACE}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+
+            # 吾喜备婚旁挂：确保与 wedding-backend 共用的外部网络存在（DNS 名 wedding-backend）
+            docker network inspect wedding-planner_default >/dev/null 2>&1 \
+              || docker network create wedding-planner_default
 
             docker compose --env-file .env -f docker-compose.prod.yml config -q
             docker compose --env-file .env -f docker-compose.prod.yml pull backend frontend

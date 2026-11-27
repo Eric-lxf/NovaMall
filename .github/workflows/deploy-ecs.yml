@@ -314,7 +314,9 @@ jobs:
             fi
 
             # 每次部署都从 GitHub Secrets / Variables 重建运行配置。
+            # 写临时文件再 mv，避免已有 root 拥有的 .env 导致重定向/chmod Permission denied。
             umask 077
+            env_tmp="$(mktemp ./.env.XXXXXX)"
             {
               printf 'TOKEN_SECRET=%s\n' "$TOKEN_SECRET"
 
@@ -355,8 +357,13 @@ jobs:
 
               printf 'WEDDING_ADMIN_BASE_URL=%s\n' "$WEDDING_ADMIN_BASE_URL"
               printf 'WEDDING_ADMIN_TOKEN=%s\n' "$WEDDING_ADMIN_TOKEN"
-            } > .env
-            chmod 600 .env
+            } > "$env_tmp"
+            chmod 600 "$env_tmp"
+            if ! mv -f "$env_tmp" .env; then
+              rm -f "$env_tmp"
+              echo "无法替换 .env（目录不可写或 sticky bit 阻止删除旧文件）。请在服务器执行: sudo chown $(id -un):$(id -gn) /opt/nova-mall/.env && sudo chmod 600 /opt/nova-mall/.env" >&2
+              exit 1
+            fi
 
             echo "$ACR_PASSWORD" | docker login "$ACR_REGISTRY" \
               --username "$ACR_USERNAME" \

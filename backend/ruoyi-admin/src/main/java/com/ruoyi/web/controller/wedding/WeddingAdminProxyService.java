@@ -5,6 +5,8 @@ import java.util.Map;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.common.core.domain.AjaxResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -24,6 +26,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Service
 public class WeddingAdminProxyService
 {
+    private static final Logger log = LoggerFactory.getLogger(WeddingAdminProxyService.class);
+
     private final WeddingAdminProperties properties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -109,11 +113,13 @@ public class WeddingAdminProxyService
         }
         catch (ResourceAccessException connEx)
         {
-            return AjaxResult.error(503, "无法连接吾喜备婚后端服务，请检查服务状态 (" + normalizedBase + ")");
+            log.warn("无法连接吾喜备婚后端: base={}, err={}", normalizedBase, connEx.getMessage());
+            return AjaxResult.error(503, "无法连接吾喜备婚后端服务，请检查服务状态");
         }
         catch (Exception ex)
         {
-            return AjaxResult.error("调用吾喜备婚管理接口异常: " + ex.getMessage());
+            log.error("调用吾喜备婚管理接口异常: path={}", upstreamPath, ex);
+            return AjaxResult.error("调用吾喜备婚管理接口异常，请稍后重试");
         }
     }
 
@@ -136,12 +142,13 @@ public class WeddingAdminProxyService
             if (code == 401)
             {
                 // 避免被 RuoYi 前端响应拦截器误判为后台自身登录会话过期
-                return AjaxResult.error(502, "备婚后端管理密钥校验未通过，请核对 WEDDING_ADMIN_TOKEN: " + message);
+                return AjaxResult.error(502, "备婚后端管理密钥校验未通过，请核对 WEDDING_ADMIN_TOKEN");
             }
             return AjaxResult.error(code, message);
         }
         catch (Exception parseEx)
         {
+            log.warn("解析吾喜备婚响应失败: httpStatus={}, err={}", httpStatus, parseEx.getMessage());
             return AjaxResult.error(httpStatus, "解析吾喜备婚响应失败");
         }
     }
